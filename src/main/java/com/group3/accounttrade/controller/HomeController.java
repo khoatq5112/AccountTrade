@@ -20,4 +20,9 @@ public class HomeController {
     public String viewIndexPageHtml() {
         return "index";
     }
+
+    @GetMapping("/register.html")
+    public String viewRegisterPageHtml() {
+        return "register";
+    }
 }
