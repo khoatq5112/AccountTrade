@@ -80,7 +80,7 @@
                         </p>
                     </div>
 
-                    <form class="space-y-5">
+                    <form class="space-y-5" onsubmit="return validateLogin(event)">
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-1">Địa chỉ Email</label>
                             <input type="email"
@@ -145,6 +145,17 @@
             </div>
         </div>
     </footer>
+    <script>
+        function validateLogin(event) {
+            const password = document.querySelector('input[type="password"]').value;
+            if (password.length < 6) {
+                alert("Mật khẩu phải có ít nhất 6 ký tự!");
+                event.preventDefault();
+                return false;
+            }
+            return true;
+        }
+    </script>
 </body>
 
 </html>
