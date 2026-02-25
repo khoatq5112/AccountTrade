@@ -1,11 +1,21 @@
 package com.group3.accounttrade.controller;
 
+import com.group3.accounttrade.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @Controller
 public class AuthController {
+
+    private final UserService userService;
+
+    @Autowired
+    public AuthController(UserService userService) {
+        this.userService = userService;
+    }
 
     @PostMapping("/register")
     public String registerUser(
@@ -13,16 +23,20 @@ public class AuthController {
             @RequestParam String email,
             @RequestParam String password,
             @RequestParam String confirmPassword,
-            @RequestParam String role) {
+            @RequestParam String role,
+            RedirectAttributes redirectAttributes) {
 
-        // TODO: Validate password matching, strength, check if username/email exists
-        // TODO: Hash the password
-        // TODO: Save user to the database depending on the schema (Users table with
-        // role_id)
+        if (!password.equals(confirmPassword)) {
+            redirectAttributes.addAttribute("error", "Passwords do not match");
+            return "redirect:/register.html";
+        }
 
-        System.out.println("Registering user: " + username + " with role: " + role);
-
-        // For now, simply redirect to login page after successful "mock" registration
-        return "redirect:/login.html?registered=true";
+        try {
+            userService.registerUser(username, email, password, role);
+            return "redirect:/login.html?registered=true";
+        } catch (Exception e) {
+            redirectAttributes.addAttribute("error", e.getMessage());
+            return "redirect:/register.html";
+        }
     }
 }
