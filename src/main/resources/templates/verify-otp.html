@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrustBridge Market | Xác thực OTP</title>
+    <!-- Google Fonts: Manrope -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#137fec',
+                        surface: '#f5f7fa',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        error: '#ef4444'
+                    },
+                    fontFamily: {
+                        sans: ['Manrope', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px rgba(0, 0, 0, 0.05)',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="font-sans antialiased min-h-screen flex flex-col bg-surface">
+    <!-- Minimal Header -->
+    <header class="bg-white border-b border-gray-100 py-4">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+            <a href="/" class="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                <span class="font-bold text-xl tracking-tight text-gray-900">TrustBridge</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-md w-full">
+            <!-- OTP Card -->
+            <div class="bg-white rounded-2xl shadow-soft border border-gray-100 overflow-hidden p-8">
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-2">Xác thực Email</h2>
+                    <p class="text-gray-500 text-sm">Chúng tôi đã gửi một mã OTP gồm 6 chữ số đến email:
+                        <strong class="text-gray-800" th:text="${email}"></strong>.
+                        Vui lòng nhập mã bên dưới để kích hoạt tài khoản.
+                    </p>
+                </div>
+
+                <div th:if="${param.error}"
+                    class="mb-4 p-3 rounded-lg bg-red-50 text-error text-sm text-center border border-red-200">
+                    <span th:text="${param.error}">Mã OTP không hợp lệ hoặc đã hết hạn.</span>
+                </div>
+
+                <form class="space-y-5" action="/verify-otp" method="POST">
+                    <input type="hidden" name="email" th:value="${email}">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Mã xác nhận (OTP)</label>
+                        <input type="text" name="otp" pattern="\d{6}" maxlength="6"
+                            class="w-full px-4 py-3 text-center tracking-widest text-xl rounded-lg border border-gray-200 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
+                            placeholder="123456" required>
+                    </div>
+
+                    <button type="submit"
+                        class="w-full bg-primary text-white font-bold py-3 px-6 rounded-lg transition-colors duration-200 hover:bg-blue-600 mt-6">
+                        Xác nhận
+                    </button>
+                </form>
+
+            </div>
+        </div>
+    </main>
+</body>
+
+</html>
