@@ -14,15 +14,24 @@ public class UserService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final OtpService otpService;
+    private final EmailService emailService;
 
     @Autowired
-    public UserService(UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository userRepository, RoleRepository roleRepository,
+            PasswordEncoder passwordEncoder, OtpService otpService, EmailService emailService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
+        this.otpService = otpService;
+        this.emailService = emailService;
     }
 
     public void registerUser(String username, String email, String password, String roleName) throws Exception {
+        // 1. Normalize Username: trim leading/trailing spaces and collapse/remove
+        // internal multi-spaces.
+        username = username.trim().replaceAll("\\s+", " ");
+
         if (userRepository.existsByUsername(username)) {
             throw new Exception("Username already exists");
         }
@@ -39,9 +48,29 @@ public class UserService {
                 .email(email)
                 .passwordHash(passwordEncoder.encode(password))
                 .role(role)
-                .isActive(true)
+                .isActive(false) // Deactivated until OTP verification
                 .build();
 
         userRepository.save(user);
+
+        // Generation and Dispatch of OTP
+        String otp = otpService.generateAndStoreOtp(email);
+        emailService.sendOtpEmail(email, otp);
+    }
+
+    public boolean activateUserWithOtp(String email, String otp) {
+        if (otpService.verifyOtp(email, otp)) {
+            User user = userRepository.findByEmail(email).orElse(null);
+            if (user != null) {
+                user.setIsActive(true);
+                userRepository.save(user);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean isEmailTaken(String email) {
+        return userRepository.existsByEmail(email);
     }
 }
