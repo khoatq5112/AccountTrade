@@ -23,7 +23,7 @@ public class SecurityConfig {
                                 .csrf(csrf -> csrf.disable()) // disable csrf for non-thymeleaf forms
                                 .authorizeHttpRequests(auth -> auth
                                                 .requestMatchers("/", "/index.html", "/login.html", "/register.html",
-                                                                "/register")
+                                                                "/register", "/verify-otp", "/api/auth/**")
                                                 .permitAll()
                                                 .anyRequest().authenticated())
                                 .formLogin(form -> form
