@@ -1,7 +1,7 @@
 ---
-page: create_listing
+page: marketplace
 ---
-Account listing creation page where sellers can post their digital accounts.
+Marketplace listing page where users can browse and filter available digital accounts for sale.
 
 **DESIGN SYSTEM (REQUIRED):**
 **Atmosphere:** Professional, secure, reliable, modern, clean, trust-focused UI.
@@ -16,8 +16,9 @@ Account listing creation page where sellers can post their digital accounts.
 **Components:** Cards with subtle rounding and soft shadows, clear CTA buttons with hover effects.
 
 **Page Structure:**
-1. Logged-in navigation bar.
-2. Centered multi-step form container.
-3. Form fields: Title, Category (Game, Social Media, etc.), Price, Detailed Description, Upload screenshots.
-4. "Secure Escrow Promise" sidebar or badge to reassure the seller that their credentials are safe.
-5. "Publish Listing" prominent CTA button.
+1. Top navigation bar with search input.
+2. Left sidebar containing marketplace filters (Category, Price Range, Seller Rating, Platform).
+3. Main content area displaying a grid of account listing cards.
+4. Each card should show the account thumbnail, title, category, price, and a verified escrow badge.
+5. Pagination controls at the bottom of the grid.
+6. Footer with TrustBridge secure escrow guarantees.
