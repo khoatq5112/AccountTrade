@@ -5,7 +5,7 @@ A modern web platform for an account trading marketplace that acts as a trusted 
 - [x] Homepage
 - [ ] Marketplace listing page
 - [ ] Account detail page
-- [ ] User dashboard (Buyer/Seller)
+- [x] User dashboard (Buyer/Seller)
 - [ ] Admin dashboard
 - [ ] Dispute center
 - [x] Login/Register page
@@ -18,12 +18,10 @@ A modern web platform for an account trading marketplace that acts as a trusted 
 3. Create account listing page for sellers.
 4. Create Marketplace listing page with filters.
 5. Create Account detail page for buyers to initiate escrow payment.
-6. Create User dashboard.
+6. [COMPLETED] Create User dashboard.
 7. Create Admin dashboard.
 8. Create Dispute center.
 9. Create About, FAQ, and Support pages.
 
 ## Creative Freedom
-- Analytics dashboard with charts (revenue, completed transactions, disputes rate)
-- Wallet balance system view
 - Two-factor authentication configuration screen
