@@ -23,13 +23,13 @@ public class CustomAuthenticationSuccessHandler implements AuthenticationSuccess
         for (GrantedAuthority grantedAuthority : authorities) {
             String authorityName = grantedAuthority.getAuthority();
             if (authorityName.equals("ROLE_BUYER")) {
-                redirectUrl = "/buyer_dashboard.html";
+                redirectUrl = "/buyer/dashboard";
                 break;
             } else if (authorityName.equals("ROLE_SELLER")) {
-                redirectUrl = "/seller_dashboard.html";
+                redirectUrl = "/seller/dashboard";
                 break;
             } else if (authorityName.equals("ROLE_ADMIN")) {
-                redirectUrl = "/admin_dashboard.html";
+                redirectUrl = "/admin/dashboard";
                 break;
             }
         }
