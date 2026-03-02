@@ -1,5 +1,7 @@
 package com.group3.accounttrade.config;
 
+import com.group3.accounttrade.service.CustomUserDetailsService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -12,6 +14,13 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class SecurityConfig {
 
+        private final CustomUserDetailsService customUserDetailsService;
+
+        @Autowired
+        public SecurityConfig(CustomUserDetailsService customUserDetailsService) {
+                this.customUserDetailsService = customUserDetailsService;
+        }
+
         @Bean
         public PasswordEncoder passwordEncoder() {
                 return new BCryptPasswordEncoder();
@@ -19,23 +28,34 @@ public class SecurityConfig {
 
         @Bean
         public SecurityFilterChain securityFilterChain(HttpSecurity http,
-                        CustomAuthenticationSuccessHandler customAuthenticationSuccessHandler) throws Exception {
+                        CustomAuthenticationSuccessHandler customAuthenticationSuccessHandler,
+                        CustomAuthenticationFailureHandler customAuthenticationFailureHandler) throws Exception {
                 http
-                                .csrf(csrf -> csrf.disable()) // disable csrf for non-thymeleaf forms
+                                .csrf(csrf -> csrf.disable())
                                 .authorizeHttpRequests(auth -> auth
                                                 .requestMatchers("/", "/index.html", "/login.html", "/register.html",
-                                                                "/register", "/verify-otp", "/api/auth/**")
+                                                                "/register", "/verify-otp", "/api/auth/**",
+                                                                "/forgot-password", "/reset-password")
                                                 .permitAll()
                                                 .anyRequest().authenticated())
                                 .formLogin(form -> form
                                                 .loginPage("/login.html")
                                                 .loginProcessingUrl("/login")
                                                 .successHandler(customAuthenticationSuccessHandler)
+                                                .failureHandler(customAuthenticationFailureHandler)
                                                 .permitAll())
+                                .rememberMe(rememberMe -> rememberMe
+                                                .userDetailsService(customUserDetailsService)
+                                                .key("trustbridge-remember-me-secret-key")
+                                                .tokenValiditySeconds(7 * 24 * 60 * 60) // 7 days
+                                                .rememberMeParameter("remember-me"))
                                 .logout(logout -> logout
-                                                .logoutSuccessUrl("/")
+                                                .logoutUrl("/logout")
+                                                .logoutSuccessUrl("/login.html?logout")
+                                                .invalidateHttpSession(true)
+                                                .deleteCookies("JSESSIONID", "remember-me")
                                                 .permitAll());
 
-                return http.build(); // Using Spring Security 6+ syntax
+                return http.build();
         }
 }
