@@ -18,7 +18,8 @@ public class SecurityConfig {
         }
 
         @Bean
-        public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                        CustomAuthenticationSuccessHandler customAuthenticationSuccessHandler) throws Exception {
                 http
                                 .csrf(csrf -> csrf.disable()) // disable csrf for non-thymeleaf forms
                                 .authorizeHttpRequests(auth -> auth
@@ -29,7 +30,7 @@ public class SecurityConfig {
                                 .formLogin(form -> form
                                                 .loginPage("/login.html")
                                                 .loginProcessingUrl("/login")
-                                                .defaultSuccessUrl("/", true)
+                                                .successHandler(customAuthenticationSuccessHandler)
                                                 .permitAll())
                                 .logout(logout -> logout
                                                 .logoutSuccessUrl("/")
