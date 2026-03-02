@@ -1,0 +1,423 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrustBridge Market | Buyer Dashboard</title>
+    <!-- Google Fonts: Manrope -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#137fec',
+                        surface: '#f5f7fa',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        error: '#ef4444'
+                    },
+                    fontFamily: {
+                        sans: ['Manrope', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px rgba(0, 0, 0, 0.05)',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style type="text/tailwindcss">
+        body { background-color: #f5f7fa; color: #1a1a1a; }
+        .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .hover-lift:hover { transform: translateY(-4px); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08); }
+        .btn-primary { @apply bg-primary text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-blue-600; }
+        .btn-outline { @apply border border-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-gray-50; }
+        .card { @apply bg-white rounded-xl shadow-soft border border-gray-100 p-6; }
+    </style>
+    <!-- Chart.js for analytics dashboard -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body class="font-sans antialiased">
+    <!-- Logged-in Navigation -->
+    <nav class="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-20 items-center">
+                <div class="flex items-center">
+                    <a href="index.html" class="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                        <i class="ph-fill ph-shield-check text-primary text-3xl"></i>
+                        <span class="font-bold text-2xl tracking-tight text-gray-900">TrustBridge</span>
+                    </a>
+                    <div class="hidden md:flex ml-10 space-x-8">
+                        <a href="marketplace.html"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Chợ trung
+                            gian</a>
+                        <a href="#"
+                            class="text-primary font-bold px-3 py-2 transition-colors border-b-2 border-primary">Dashboard</a>
+                        <a href="support.html"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Hỗ trợ</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <div
+                        class="flex items-center gap-2 text-sm font-bold bg-blue-50 text-primary py-1.5 px-3 rounded-full border border-blue-100 shadow-sm cursor-pointer hover:bg-blue-100 transition-colors">
+                        <i class="ph-fill ph-wallet"></i> 31.250.000 ₫
+                    </div>
+                    <div class="relative" id="userMenuWrapper">
+                        <button id="userMenuBtn" onclick="toggleUserMenu()"
+                            class="flex items-center gap-3 cursor-pointer group focus:outline-none">
+                            <div
+                                class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold shadow-soft group-hover:scale-105 transition-transform">
+                                TU
+                            </div>
+                            <div class="hidden md:block group-hover:opacity-80 transition-opacity text-left">
+                                <div class="text-sm font-bold text-gray-900 leading-tight">Test User</div>
+                                <div class="text-xs text-gray-500">Người mua</div>
+                            </div>
+                            <i class="ph ph-caret-down text-gray-400 text-sm"></i>
+                        </button>
+                        <!-- Dropdown -->
+                        <div id="userMenu"
+                            class="hidden absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
+                            <a href="/buyer/dashboard"
+                                class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-bold">
+                                <i class="ph ph-squares-four"></i> Dashboard
+                            </a>
+                            <div class="border-t border-gray-100 my-1"></div>
+                            <form action="/logout" method="POST">
+                                <button type="submit"
+                                    class="w-full flex items-center gap-2 px-4 py-2 text-sm text-error hover:bg-red-50 font-bold text-left">
+                                    <i class="ph ph-sign-out"></i> Đăng xuất
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Dashboard Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="flex flex-col md:flex-row gap-8">
+
+            <!-- Sidebar -->
+            <aside class="w-full md:w-64 flex-shrink-0">
+                <div class="bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden sticky top-28">
+                    <div class="p-6 border-b border-gray-100 text-center">
+                        <div class="relative inline-block">
+                            <div
+                                class="w-20 h-20 mx-auto rounded-full bg-primary text-white flex items-center justify-center font-bold text-2xl mb-3 shadow-md">
+                                TU
+                            </div>
+                            <div
+                                class="absolute bottom-3 right-0 w-4 h-4 bg-success border-2 border-white rounded-full">
+                            </div>
+                        </div>
+                        <h2 class="font-bold text-lg text-gray-900">Test User</h2>
+                        <div class="flex items-center justify-center gap-1 text-sm text-success mt-1">
+                            <i class="ph-fill ph-check-circle"></i> Đã xác minh KYC
+                        </div>
+                    </div>
+                    <nav class="p-4 space-y-1">
+                        <a href="#"
+                            class="flex items-center gap-3 px-4 py-3 bg-blue-50 text-primary font-bold rounded-lg transition-colors">
+                            <i class="ph-fill ph-squares-four text-lg"></i> Tổng quan
+                        </a>
+                        <a href="#"
+                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-shopping-cart text-lg"></i> Đơn hàng đang xử lý
+                        </a>
+                        <a href="#"
+                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-clock-counter-clockwise text-lg"></i> Lịch sử giao dịch
+                        </a>
+                        <a href="wallet.html"
+                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-wallet text-lg"></i> Ví & Thanh toán
+                        </a>
+                        <a href="settings.html"
+                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-gear text-lg"></i> Cài đặt tài khoản
+                        </a>
+                        <a href="disputes.html"
+                            class="flex items-center gap-3 px-4 py-3 text-error hover:bg-red-50 font-bold rounded-lg transition-colors mt-6 border border-transparent hover:border-red-100">
+                            <i class="ph ph-warning-circle text-lg"></i> Trung tâm khiếu nại
+                        </a>
+                    </nav>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="flex-1 space-y-6">
+                <!-- Welcome Section -->
+                <div class="flex justify-between items-center mb-2">
+                    <h1 class="text-2xl font-bold text-gray-900">Tổng quan Dashboard</h1>
+                    <button class="btn-primary flex items-center gap-2"><i class="ph-bold ph-plus"></i> Tạo yêu cầu
+                        mua</button>
+                </div>
+
+                <!-- Metrics Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Wallet Card -->
+                    <div
+                        class="card bg-gradient-to-br from-primary to-blue-700 text-white border-0 relative overflow-hidden hover-lift hover:shadow-lg transition-shadow">
+                        <div class="absolute -top-4 -right-4 p-4 opacity-10 transform rotate-12">
+                            <i class="ph-fill ph-wallet" style="font-size: 8rem;"></i>
+                        </div>
+                        <h3 class="text-blue-100 text-sm font-bold mb-1 relative z-10">Số dư ví khả dụng</h3>
+                        <div class="text-4xl font-bold mb-6 relative z-10 tracking-tight">31.250.000 ₫</div>
+                        <div class="flex gap-3 relative z-10">
+                            <button
+                                class="flex-1 bg-white text-primary hover:bg-blue-50 font-bold py-2 px-3 rounded-lg text-sm transition-colors shadow flex items-center justify-center gap-1"><i
+                                    class="ph-bold ph-plus"></i> Nạp</button>
+                            <button
+                                class="flex-1 bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-3 rounded-lg text-sm transition-colors flex items-center justify-center gap-1"><i
+                                    class="ph-bold ph-arrow-up-right"></i> Rút</button>
+                        </div>
+                    </div>
+
+                    <!-- In Escrow Stats -->
+                    <div class="card flex flex-col justify-center hover-lift border-orange-100 bg-orange-50/30">
+                        <div class="flex items-center justify-between mb-4">
+                            <div
+                                class="w-12 h-12 rounded-full bg-orange-100 text-warning flex items-center justify-center shadow-sm">
+                                <i class="ph-fill ph-lock-key text-2xl"></i>
+                            </div>
+                            <span
+                                class="text-xs font-bold text-orange-700 bg-orange-100 px-2.5 py-1 rounded-full border border-orange-200">2
+                                Đơn</span>
+                        </div>
+                        <h3 class="text-gray-500 text-sm font-bold mb-1">Đang tạm giữ (Escrow)</h3>
+                        <div class="text-3xl font-bold text-gray-900">18.750.000 ₫</div>
+                    </div>
+
+                    <!-- Completed Purchases Stats -->
+                    <div class="card flex flex-col justify-center hover-lift border-green-100 bg-green-50/30">
+                        <div class="flex items-center justify-between mb-4">
+                            <div
+                                class="w-12 h-12 rounded-full bg-green-100 text-success flex items-center justify-center shadow-sm">
+                                <i class="ph-fill ph-check-circle text-2xl"></i>
+                            </div>
+                            <span
+                                class="text-xs font-bold text-green-700 bg-green-100 px-2.5 py-1 rounded-full border border-green-200">12
+                                Đơn</span>
+                        </div>
+                        <h3 class="text-gray-500 text-sm font-bold mb-1">Giao dịch thành công</h3>
+                        <div class="text-3xl font-bold text-gray-900">85.500.000 ₫</div>
+                    </div>
+                </div>
+
+                <!-- Active Escrow Transactions -->
+                <div class="card">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-bold text-gray-900">Giao dịch đang chờ xử lý</h2>
+                        <a href="#"
+                            class="text-sm font-bold text-primary hover:text-blue-700 hover:underline flex items-center gap-1">Xem
+                            tất cả <i class="ph-bold ph-arrow-right"></i></a>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b-2 border-gray-100 text-xs uppercase tracking-wider text-gray-500">
+                                    <th class="py-3 px-4 font-bold">Mã GD</th>
+                                    <th class="py-3 px-4 font-bold">Sản phẩm / Người bán</th>
+                                    <th class="py-3 px-4 font-bold">Số tiền (Escrow)</th>
+                                    <th class="py-3 px-4 font-bold">Trạng thái</th>
+                                    <th class="py-3 px-4 font-bold text-right">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr class="hover:bg-gray-50 transition-colors group">
+                                    <td class="py-4 px-4 font-mono text-sm text-gray-600">#TRX-8921</td>
+                                    <td class="py-4 px-4">
+                                        <div class="font-bold text-gray-900 text-sm">Valorant Radiant Rank Account</div>
+                                        <div class="text-xs text-gray-500 mt-1 flex items-center gap-1"><i
+                                                class="ph-fill ph-user text-gray-400"></i> ProGamer99</div>
+                                    </td>
+                                    <td class="py-4 px-4 font-bold text-gray-900">11.250.000 ₫</td>
+                                    <td class="py-4 px-4">
+                                        <span
+                                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-700 border border-orange-200 shadow-sm">
+                                            <span class="relative flex h-2 w-2">
+                                                <span
+                                                    class="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                                                <span
+                                                    class="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                                            </span>
+                                            Chờ bạn xác minh
+                                        </span>
+                                    </td>
+                                    <td class="py-4 px-4 text-right">
+                                        <div class="flex items-center justify-end gap-2">
+                                            <button
+                                                class="text-xs font-bold bg-error text-white hover:bg-red-600 px-3 py-2 rounded-lg transition-colors shadow-sm">Khiếu
+                                                nại</button>
+                                            <button class="text-xs font-bold btn-primary px-3 py-2 shadow-sm">Đã nhận
+                                                Hàng</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr class="hover:bg-gray-50 transition-colors">
+                                    <td class="py-4 px-4 font-mono text-sm text-gray-600">#TRX-8910</td>
+                                    <td class="py-4 px-4">
+                                        <div class="font-bold text-gray-900 text-sm">Aged Discord Account with OG Badges
+                                        </div>
+                                        <div class="text-xs text-gray-500 mt-1 flex items-center gap-1"><i
+                                                class="ph-fill ph-user text-gray-400"></i> Web3Trader</div>
+                                    </td>
+                                    <td class="py-4 px-4 font-bold text-gray-900">7.500.000 ₫</td>
+                                    <td class="py-4 px-4">
+                                        <span
+                                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700 border border-blue-200">
+                                            <i class="ph-fill ph-clock"></i> Chờ người bán giao
+                                        </span>
+                                    </td>
+                                    <td class="py-4 px-4 text-right">
+                                        <button
+                                            class="text-xs font-bold btn-outline px-3 py-2 hover:bg-gray-100 transition-colors">Xem
+                                            chi tiết</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Spend Analytics Chart (Creative Freedom) -->
+                <div class="card">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-bold text-gray-900">Lịch sử giao dịch 6 tháng gần nhất</h2>
+                        <select
+                            class="text-sm font-bold text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option>Năm nay</option>
+                            <option>Năm trước</option>
+                        </select>
+                    </div>
+                    <div class="h-64 flex items-center justify-center p-4">
+                        <!-- Chart Container -->
+                        <canvas id="spendChart"></canvas>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer snippet -->
+    <footer class="bg-gray-900 text-white py-8 mt-12">
+        <div
+            class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center text-sm text-gray-500 border-t border-gray-800 pt-8">
+            <div class="flex items-center gap-2 mb-4 md:mb-0">
+                <i class="ph-fill ph-shield-check text-primary text-2xl"></i>
+                <span class="font-bold text-lg tracking-tight text-gray-300">TrustBridge Market</span>
+            </div>
+            <p>&copy; 2026 TrustBridge Market. Bảo vệ qua hệ thống giao dịch trung gian.</p>
+        </div>
+    </footer>
+
+    <!-- Chart Configuration Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const ctx = document.getElementById('spendChart').getContext('2d');
+
+            // Gradient for chart
+            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(19, 127, 236, 0.8)');
+            gradient.addColorStop(1, 'rgba(19, 127, 236, 0.2)');
+
+            const spendChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [{
+                        label: 'Chi tiêu ($)',
+                        data: [120, 450, 300, 900, 600, 1050],
+                        backgroundColor: gradient,
+                        borderRadius: 6,
+                        borderWidth: 0,
+                        barThickness: 32
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: '#1a1a1a',
+                            titleFont: { family: 'Manrope', size: 13 },
+                            bodyFont: { family: 'Manrope', size: 14, weight: 'bold' },
+                            padding: 12,
+                            displayColors: false,
+                            callbacks: {
+                                label: function (context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(context.parsed.y);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: '#f5f7fa',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                font: { family: 'Manrope', size: 12 },
+                                color: '#9ca3af',
+                                callback: function (value, index, values) {
+                                    return new Intl.NumberFormat('vi-VN').format(value) + ' ₫';
+                                }
+                            },
+                            border: { display: false }
+                        },
+                        x: {
+                            grid: {
+                                display: false,
+                                drawBorder: false
+                            },
+                            ticks: {
+                                font: { family: 'Manrope', size: 12, weight: 'bold' },
+                                color: '#6b7280'
+                            },
+                            border: { display: false }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+    <script>
+        function toggleUserMenu() {
+            document.getElementById('userMenu').classList.toggle('hidden');
+        }
+        document.addEventListener('click', function (e) {
+            const wrapper = document.getElementById('userMenuWrapper');
+            if (wrapper && !wrapper.contains(e.target)) {
+                document.getElementById('userMenu').classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+
+</html>
