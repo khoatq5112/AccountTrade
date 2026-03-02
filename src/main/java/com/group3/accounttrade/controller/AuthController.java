@@ -73,4 +73,47 @@ public class AuthController {
             return "redirect:/verify-otp";
         }
     }
+
+    @GetMapping("/forgot-password")
+    public String showForgotPasswordPage() {
+        return "forgot-password";
+    }
+
+    @PostMapping("/forgot-password")
+    public String handleForgotPassword(@RequestParam String email, RedirectAttributes redirectAttributes) {
+        try {
+            userService.sendPasswordResetOtp(email);
+            redirectAttributes.addAttribute("email", email);
+            redirectAttributes.addAttribute("sent", "true");
+            return "redirect:/forgot-password";
+        } catch (Exception e) {
+            redirectAttributes.addAttribute("error", e.getMessage());
+            return "redirect:/forgot-password";
+        }
+    }
+
+    @GetMapping("/reset-password")
+    public String showResetPasswordPage(@RequestParam(required = false) String email, Model model) {
+        model.addAttribute("email", email);
+        return "reset-password";
+    }
+
+    @PostMapping("/reset-password")
+    public String handleResetPassword(@RequestParam String email, @RequestParam String otp,
+            @RequestParam String newPassword, @RequestParam String confirmPassword,
+            RedirectAttributes redirectAttributes) {
+        if (!newPassword.equals(confirmPassword)) {
+            redirectAttributes.addAttribute("error", "Mật khẩu xác nhận không khớp.");
+            redirectAttributes.addAttribute("email", email);
+            return "redirect:/reset-password";
+        }
+        boolean success = userService.resetPasswordWithOtp(email, otp, newPassword);
+        if (success) {
+            return "redirect:/login.html?reset=true";
+        } else {
+            redirectAttributes.addAttribute("error", "Mã OTP không hợp lệ hoặc đã hết hạn.");
+            redirectAttributes.addAttribute("email", email);
+            return "redirect:/reset-password";
+        }
+    }
 }
