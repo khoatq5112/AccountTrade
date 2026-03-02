@@ -73,4 +73,23 @@ public class UserService {
     public boolean isEmailTaken(String email) {
         return userRepository.existsByEmail(email);
     }
+
+    public void sendPasswordResetOtp(String email) throws Exception {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new Exception("Không tìm thấy tài khoản với email này."));
+        String otp = otpService.generateAndStoreOtp(email);
+        emailService.sendOtpEmail(email, otp);
+    }
+
+    public boolean resetPasswordWithOtp(String email, String otp, String newPassword) {
+        if (otpService.verifyOtp(email, otp)) {
+            User user = userRepository.findByEmail(email).orElse(null);
+            if (user != null) {
+                user.setPasswordHash(passwordEncoder.encode(newPassword));
+                userRepository.save(user);
+                return true;
+            }
+        }
+        return false;
+    }
 }
