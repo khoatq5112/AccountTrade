@@ -2,10 +2,9 @@ package com.group3.accounttrade.service;
 
 import com.group3.accounttrade.entity.Category;
 import com.group3.accounttrade.entity.Post;
-import com.group3.accounttrade.entity.PostStatus;
+import com.group3.accounttrade.entity.StockStatus;
 import com.group3.accounttrade.repository.CategoryRepository;
 import com.group3.accounttrade.repository.PostRepository;
-import com.group3.accounttrade.repository.PostStatusRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,21 +19,23 @@ public class CategoryService {
 
     private final CategoryRepository categoryRepository;
     private final PostRepository postRepository;
-    private final PostStatusRepository postStatusRepository;
 
+    /**
+     * Get all categories ordered by display order.
+     */
     @Transactional(readOnly = true)
-    public List<Category> getAllParentCategories() {
-        return categoryRepository.findByParentIsNullOrderByDisplayOrderAsc();
-    }
-
-    @Transactional(readOnly = true)
-    public List<Category> getSubcategories(Integer parentId) {
-        return categoryRepository.findByParentCategoryIdOrderByDisplayOrderAsc(parentId);
+    public List<Category> getAllCategories() {
+        return categoryRepository.findAllOrderByDisplayOrderAsc();
     }
 
     @Transactional(readOnly = true)
     public Category getCategoryById(Integer id) {
         return categoryRepository.findById(id).orElse(null);
+    }
+
+    @Transactional(readOnly = true)
+    public Post getPostById(Integer id) {
+        return postRepository.findById(id).orElse(null);
     }
 
     @Transactional(readOnly = true)
@@ -44,38 +45,21 @@ public class CategoryService {
 
     @Transactional(readOnly = true)
     public List<Post> getPostsByCategoryName(String categoryName, int limit) {
-        PostStatus availableStatus = postStatusRepository.findByStatusName("Available").orElse(null);
-        if (availableStatus == null) {
-            return List.of();
-        }
-
-        List<Category> allCategories = categoryRepository.findAll();
-        Category foundCategory = null;
-
-        for (Category cat : allCategories) {
-            if (cat.getCategoryName().equals(categoryName)) {
-                foundCategory = cat;
-                break;
-            }
-        }
+        // Find category by name
+        Category foundCategory = categoryRepository.findAll().stream()
+                .filter(cat -> cat.getCategoryName().equals(categoryName))
+                .findFirst()
+                .orElse(null);
 
         if (foundCategory == null) {
             return List.of();
         }
 
-        if (foundCategory.getParent() == null) {
-            return postRepository.findByParentCategory(foundCategory.getCategoryId(), availableStatus, Pageable.ofSize(limit));
-        }
-
-        return postRepository.findByCategoryAndStatus(foundCategory, availableStatus, Pageable.ofSize(limit));
+        return postRepository.findByCategoryAndStockStatus(foundCategory, StockStatus.IN_STOCK, Pageable.ofSize(limit)).getContent();
     }
 
     @Transactional(readOnly = true)
     public List<Post> searchPosts(String query) {
-        PostStatus availableStatus = postStatusRepository.findByStatusName("Available").orElse(null);
-        if (availableStatus == null) {
-            return List.of();
-        }
-        return postRepository.searchByTitle(query, availableStatus);
+        return postRepository.searchByTitle(query);
     }
 }

@@ -1,16 +1,15 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TrustBridge Market | Giao dịch tài khoản an toàn</title>
-    <!-- Google Fonts: Manrope -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -18,7 +17,9 @@
                     colors: {
                         primary: '#137fec',
                         'primary-dark': '#0d6ed9',
-                        surface: '#f5f7fa',
+                        ink: '#0f172a',
+                        surface: '#f4f7fb',
+                        sand: '#eef4ff',
                         success: '#22c55e',
                         warning: '#f59e0b',
                         error: '#ef4444'
@@ -27,769 +28,432 @@
                         sans: ['Manrope', 'sans-serif'],
                     },
                     boxShadow: {
-                        'soft': '0 4px 20px rgba(0, 0, 0, 0.05)',
-                        'card': '0 2px 12px rgba(0, 0, 0, 0.06)',
+                        card: '0 16px 40px rgba(15, 23, 42, 0.08)',
+                        soft: '0 12px 28px rgba(19, 127, 236, 0.12)',
                     }
                 }
             }
         }
     </script>
-    <!-- Phosphor Icons -->
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <style type="text/tailwindcss">
-        body { background-color: #f5f7fa; color: #1a1a1a; }
-        .hover-lift { transition: transform 0.25s ease, box-shadow 0.25s ease; }
-        .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1); }
-        .slider-btn { transition: all 0.3s ease; }
-        .slider-btn:hover { transform: scale(1.1); }
-        .category-item { transition: all 0.2s ease; }
-        .category-item:hover { background-color: #f0f7ff; }
-        .category-item.active { background-color: #e0f2fe; border-left: 3px solid #137fec; }
+        body {
+            background:
+                radial-gradient(circle at top left, rgba(19, 127, 236, 0.08), transparent 34%),
+                linear-gradient(180deg, #f8fbff 0%, #f4f7fb 30%, #ffffff 100%);
+            color: #0f172a;
+        }
+
+        .glass-panel {
+            @apply bg-white/85 backdrop-blur-xl border border-white/70 shadow-card;
+        }
+
+        .hover-rise {
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+        }
+
+        .hover-rise:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+        }
+
+        .section-shell {
+            @apply rounded-[2rem] border border-slate-200/80 bg-white shadow-card;
+        }
+
+        .grid-card {
+            @apply rounded-[1.5rem] border border-slate-200 bg-white overflow-hidden hover-rise;
+        }
     </style>
 </head>
 
 <body class="font-sans antialiased">
-    <!-- 1. Top Announcement Bar -->
-    <div class="bg-primary text-white text-sm font-medium py-2">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-center gap-2">
-            <i class="ph-fill ph-gift"></i>
-            <span>🎉 Giảm <strong>10%</strong> cho đơn hàng đầu tiên! | <strong>MIỄN PHÍ</strong> trung gian cho đơn trên 5 triệu!</span>
-            <a href="#" class="underline hover:text-yellow-200 ml-2">Xem ngay</a>
+    <div class="border-b border-slate-200/70 bg-white/85 backdrop-blur-xl">
+        <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+            <div class="flex items-center gap-2 text-sm text-slate-600">
+                <span class="inline-flex h-8 w-8 items-center justify-center rounded-2xl bg-primary text-white">
+                    <i class="ph-fill ph-shield-check text-lg"></i>
+                </span>
+                <span class="font-semibold">Escrow-first marketplace cho tài khoản số, license và gói subscription.</span>
+            </div>
+                <th:block th:if="${!isAuthenticated}">
+                    <a href="/register" class="hidden text-sm font-bold text-primary hover:text-primary-dark md:block">Bắt đầu bán trên TrustBridge</a>
+                </th:block>
+                <th:block th:if="${isAuthenticated}">
+                    <div class="hidden items-center gap-2 rounded-full bg-green-50 px-4 py-2 text-sm font-bold text-success md:inline-flex">
+                        <i class="ph-fill ph-check-circle"></i>
+                        Đã đăng nhập
+                    </div>
+                </th:block>
         </div>
     </div>
 
-    <!-- 2. Header -->
-    <nav class="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-18 items-center py-3">
-                <!-- Logo -->
-                <div class="flex items-center gap-3">
-                    <a href="/" class="flex items-center gap-2">
-                        <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                            <i class="ph-fill ph-shield-check text-white text-2xl"></i>
-                        </div>
-                        <span class="font-bold text-xl tracking-tight text-gray-900">TrustBridge</span>
-                    </a>
+    <header class="sticky top-0 z-50 border-b border-slate-200/70 bg-white/90 backdrop-blur-xl">
+        <div class="mx-auto flex max-w-7xl items-center justify-between gap-5 px-4 py-4 sm:px-6 lg:px-8">
+            <a href="/" class="flex items-center gap-3">
+                <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary shadow-soft">
+                    <i class="ph-fill ph-shield-check text-2xl text-white"></i>
                 </div>
-
-                <!-- Search Bar -->
-                <div class="hidden md:flex flex-1 max-w-xl mx-8">
-                    <form th:action="@{/marketplace}" method="get" class="relative w-full">
-                        <input type="text" name="q" placeholder="Tìm kiếm game, tài khoản, nền tảng..."
-                            class="w-full py-2.5 px-4 pl-11 bg-surface border border-gray-200 rounded-full text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all">
-                        <i class="ph ph-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                        <button type="submit" class="absolute right-1.5 top-1/2 -translate-y-1/2 bg-primary text-white px-4 py-1.5 rounded-full text-sm font-semibold hover:bg-primary-dark transition-colors">
-                            Tìm
-                        </button>
-                    </form>
+                <div>
+                    <p class="text-lg font-extrabold tracking-tight text-ink">TrustBridge</p>
+                    <p class="text-xs font-medium text-slate-500">Safe account marketplace</p>
                 </div>
+            </a>
 
-                <!-- Nav Actions -->
-                <div class="flex items-center gap-3">
-                    <a href="#" class="relative p-2 text-gray-600 hover:text-primary transition-colors">
-                        <i class="ph-fill ph-shopping-cart text-xl"></i>
-                        <span class="absolute -top-0.5 -right-0.5 w-4 h-4 bg-error text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
-                    </a>
-                    <div class="hidden sm:flex items-center gap-2 border-l border-gray-200 pl-3 ml-1">
-                        <a href="/login" class="text-gray-600 hover:text-primary font-semibold text-sm">Đăng nhập</a>
-                        <span class="text-gray-300">|</span>
-                        <a href="/register" class="text-primary font-semibold text-sm hover:underline">Đăng ký</a>
+            <form th:action="@{/marketplace}" method="get" class="hidden flex-1 md:block">
+                <div class="mx-auto flex max-w-2xl items-center rounded-full border border-slate-200 bg-surface px-4 py-2 shadow-sm">
+                    <i class="ph ph-magnifying-glass text-lg text-slate-400"></i>
+                    <input type="text" name="q" placeholder="Tìm tài khoản, gói subscription, phần mềm bản quyền..."
+                        class="w-full bg-transparent px-3 py-2 text-sm outline-none placeholder:text-slate-400">
+                    <button type="submit" class="rounded-full bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-primary-dark">Tìm kiếm</button>
+                </div>
+            </form>
+
+            <div class="flex items-center gap-3">
+                <a href="/marketplace" class="hidden rounded-full px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 lg:inline-flex">Marketplace</a>
+                <th:block th:if="${!isAuthenticated}">
+                    <a href="/login" class="rounded-full px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">Đăng nhập</a>
+                    <a href="/register" class="rounded-full bg-ink px-4 py-2 text-sm font-bold text-white hover:bg-slate-800">Đăng ký</a>
+                </th:block>
+                <th:block th:if="${isAuthenticated}">
+                    <div class="hidden text-right md:block">
+                        <p class="text-sm font-extrabold text-ink" th:text="${currentUsername != null ? currentUsername : 'Đã đăng nhập'}">Username</p>
+                        <p class="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400" th:text="${currentRole != null ? currentRole : 'Member'}">Role</p>
                     </div>
-                </div>
+                    <a th:href="${currentRole == 'Seller' ? '/seller/dashboard' : (currentRole == 'Admin' ? '/admin/dashboard' : '/buyer/purchases')}"
+                        class="rounded-full bg-ink px-4 py-2 text-sm font-bold text-white hover:bg-slate-800"
+                        th:text="${currentRole == 'Seller' ? 'Seller hub' : (currentRole == 'Admin' ? 'Admin panel' : 'Tài khoản của tôi')}">Tài khoản của tôi</a>
+                </th:block>
             </div>
         </div>
-    </nav>
+    </header>
 
-    <!-- 3. Hero Section with Sidebar & Promo Blocks -->
-    <section class="bg-surface py-6">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex gap-6">
-                <!-- Left Sidebar - Categories -->
-                <div class="hidden lg:block w-64 flex-shrink-0">
-                    <div class="bg-white rounded-xl shadow-card overflow-hidden">
-                        <div class="p-4 border-b border-gray-100">
-                            <h3 class="font-bold text-gray-900 flex items-center gap-2">
-                                <i class="ph-fill ph-list-dashes text-primary"></i>
-                                Danh mục sản phẩm
-                            </h3>
+    <main>
+        <section class="mx-auto max-w-7xl px-4 pb-8 pt-8 sm:px-6 lg:px-8">
+            <div class="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+                <div class="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-ink via-slate-900 to-primary p-8 text-white shadow-card sm:p-10">
+                    <div class="absolute -right-16 top-8 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
+                    <div class="absolute bottom-0 right-0 h-56 w-56 translate-x-1/4 translate-y-1/4 rounded-full bg-primary-dark/40 blur-3xl"></div>
+                    <div class="relative max-w-2xl">
+                        <div class="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white/90">
+                            <i class="ph-fill ph-lock-key"></i>
+                            Trung gian an toàn cho giao dịch tài khoản số
                         </div>
-                        <div class="py-2">
-                            <th:block th:each="category : ${parentCategories}">
-                                <a th:href="@{/marketplace(categoryId=${category.categoryId})}" class="category-item flex items-center gap-3 px-4 py-3 text-gray-700 hover:text-primary">
-                                    <i th:class="${'ph ' + category.categoryIcon + ' text-lg'}"></i>
-                                    <span class="font-medium text-sm" th:text="${category.categoryName}">Category</span>
+                        <div th:if="${isAuthenticated}" class="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-emerald-400/15 px-4 py-2 text-sm font-bold text-emerald-100">
+                            <i class="ph-fill ph-user-circle"></i>
+                            <span th:text="${'Xin chào, ' + (currentUsername != null ? currentUsername : 'bạn') + ' - bạn đã đăng nhập.'}">Xin chào</span>
+                        </div>
+                        <h1 class="text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
+                            Mua bán tài khoản số với giao diện sạch hơn, rõ ràng hơn, đáng tin cậy hơn.
+                        </h1>
+                        <p class="mt-5 max-w-xl text-base leading-7 text-white/78 sm:text-lg">
+                            TrustBridge giúp buyer và seller giao dịch subscription, license và digital account qua quy trình escrow minh bạch, tránh rủi ro giao dịch trực tiếp.
+                        </p>
+                        <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+                            <a href="/marketplace" class="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-sm font-extrabold text-ink hover:bg-slate-100">
+                                Khám phá marketplace
+                            </a>
+                            <th:block th:if="${!isAuthenticated}">
+                                <a href="/register" class="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm font-bold text-white hover:bg-white/15">
+                                    Tạo tài khoản
+                                </a>
+                            </th:block>
+                            <th:block th:if="${isAuthenticated}">
+                                <a th:href="${currentRole == 'Seller' ? '/seller/dashboard' : (currentRole == 'Admin' ? '/admin/dashboard' : '/buyer/purchases')}"
+                                    class="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm font-bold text-white hover:bg-white/15">
+                                    Đi tới khu vực của bạn
+                                </a>
+                            </th:block>
+                        </div>
+                        <div class="mt-10 grid gap-4 sm:grid-cols-3">
+                            <div class="rounded-3xl border border-white/10 bg-white/8 p-4">
+                                <p class="text-sm text-white/60">Tỷ lệ hài lòng</p>
+                                <p class="mt-2 text-2xl font-extrabold">98%</p>
+                            </div>
+                            <div class="rounded-3xl border border-white/10 bg-white/8 p-4">
+                                <p class="text-sm text-white/60">Hỗ trợ trung gian</p>
+                                <p class="mt-2 text-2xl font-extrabold">24/7</p>
+                            </div>
+                            <div class="rounded-3xl border border-white/10 bg-white/8 p-4">
+                                <p class="text-sm text-white/60">Ngành hàng nổi bật</p>
+                                <p class="mt-2 text-2xl font-extrabold">10+</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <aside class="space-y-5">
+                    <div class="glass-panel rounded-[2rem] p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Danh mục nhanh</p>
+                                <h2 class="mt-2 text-2xl font-extrabold text-ink">Mua đúng thứ bạn cần</h2>
+                            </div>
+                            <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-sand text-primary">
+                                <i class="ph-fill ph-grid-four text-2xl"></i>
+                            </span>
+                        </div>
+                        <div class="mt-6 grid grid-cols-2 gap-3">
+                            <th:block th:each="category, iterStat : ${parentCategories}" th:if="${iterStat.index < 6}">
+                                <a th:href="@{/marketplace(categoryId=${category.categoryId})}"
+                                    class="rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 hover:border-primary hover:text-primary">
+                                    <div class="flex items-center gap-3">
+                                        <span class="flex h-10 w-10 items-center justify-center rounded-2xl bg-surface text-primary">
+                                            <i th:class="${'ph ' + category.categoryIcon + ' text-lg'}"></i>
+                                        </span>
+                                        <span th:text="${category.categoryName}">Category</span>
+                                    </div>
                                 </a>
                             </th:block>
                         </div>
                     </div>
-                </div>
 
-                <!-- Main Content - Promo Slider & Blocks -->
-                <div class="flex-1">
-                    <!-- Slider -->
-                    <div class="relative mb-6 rounded-xl overflow-hidden shadow-card group">
-                        <div class="slider-container relative h-64 md:h-80 overflow-hidden">
-                            <!-- Slide 1 -->
-                            <div class="slider-slide absolute inset-0 flex" data-slide="0">
-                                <div class="w-full h-full bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 flex items-center p-8">
-                                    <div class="flex-1 text-white">
-                                        <span class="inline-block bg-white/20 px-3 py-1 rounded-full text-xs font-bold mb-4">KHUYẾN MÃI</span>
-                                        <h2 class="text-3xl md:text-4xl font-extrabold mb-3">Google Drive | Google One</h2>
-                                        <p class="text-xl md:text-2xl font-bold mb-2 text-yellow-300">THOẢI MÁI DATA</p>
-                                        <p class="text-lg mb-4 text-blue-100">Không lo về giá</p>
-                                        <p class="text-3xl font-extrabold mb-1">CHỈ TỪ <span class="text-yellow-300">19K/THÁNG</span></p>
-                                        <p class="text-sm text-blue-200">Cho 3 người sử dụng</p>
-                                    </div>
-                                    <div class="hidden md:flex flex-1 items-center justify-center">
-                                        <div class="relative">
-                                            <i class="ph-fill ph-cloud text-white/20 text-[200px] absolute -top-10 -left-10"></i>
-                                            <i class="ph-fill ph-google-logo text-white text-[80px] relative z-10"></i>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- Slide 2 -->
-                            <div class="slider-slide absolute inset-0 flex hidden" data-slide="1">
-                                <div class="w-full h-full bg-gradient-to-br from-purple-600 via-purple-700 to-purple-800 flex items-center p-8">
-                                    <div class="flex-1 text-white">
-                                        <span class="inline-block bg-white/20 px-3 py-1 rounded-full text-xs font-bold mb-4">MỚI</span>
-                                        <h2 class="text-3xl md:text-4xl font-extrabold mb-3">KHÁM PHÁ THẾ GIỚI AI</h2>
-                                        <p class="text-xl font-bold mb-4 text-yellow-300">SIÊU TỐI ƯU</p>
-                                        <div class="flex gap-4 mt-4">
-                                            <div class="bg-white/20 rounded-lg p-3 text-center">
-                                                <i class="ph-fill ph-sparkle text-2xl"></i>
-                                                <p class="text-xs mt-1">ChatGPT</p>
-                                            </div>
-                                            <div class="bg-white/20 rounded-lg p-3 text-center">
-                                                <i class="ph-fill ph-brain text-2xl"></i>
-                                                <p class="text-xs mt-1">Claude</p>
-                                            </div>
-                                            <div class="bg-white/20 rounded-lg p-3 text-center">
-                                                <i class="ph-fill ph-wand-stars text-2xl"></i>
-                                                <p class="text-xs mt-1">Midjourney</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="hidden md:flex flex-1 items-center justify-center">
-                                        <i class="ph-fill ph-robot text-white/30 text-[180px]"></i>
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- Slide 3 -->
-                            <div class="slider-slide absolute inset-0 flex hidden" data-slide="2">
-                                <div class="w-full h-full bg-gradient-to-br from-orange-500 via-red-500 to-red-600 flex items-center p-8">
-                                    <div class="flex-1 text-white">
-                                        <span class="inline-block bg-white/20 px-3 py-1 rounded-full text-xs font-bold mb-4">GIẢM 30%</span>
-                                        <h2 class="text-3xl md:text-4xl font-extrabold mb-3">STEAM WALLET</h2>
-                                        <p class="text-xl font-bold mb-4 text-yellow-300">NẠP SIÊU TIẾT KIỆM</p>
-                                        <p class="text-2xl font-bold">Chỉ từ 49K</p>
-                                        <p class="text-sm text-red-200 mt-2">Áp dụng cho tất cả mệnh giá</p>
-                                    </div>
-                                    <div class="hidden md:flex flex-1 items-center justify-center">
-                                        <div class="relative">
-                                            <i class="ph-fill ph-game-controller text-white/30 text-[160px]"></i>
-                                            <div class="absolute -bottom-4 -right-4 bg-white rounded-lg p-2">
-                                                <i class="ph-fill ph-steam-logo text-3xl text-gray-900"></i>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                    <div class="rounded-[2rem] bg-white p-6 shadow-card">
+                        <div class="flex items-center gap-3">
+                            <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-green-50 text-success">
+                                <i class="ph-fill ph-shield-check text-2xl"></i>
+                            </span>
+                            <div>
+                                <p class="text-sm font-semibold text-slate-500">Cam kết TrustBridge</p>
+                                <h3 class="text-xl font-extrabold text-ink">3 lớp bảo vệ giao dịch</h3>
                             </div>
                         </div>
-                        <!-- Slider Controls -->
-                        <button class="slider-btn absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 hover:bg-white rounded-full flex items-center justify-center shadow-lg z-10" onclick="changeSlide(-1)">
-                            <i class="ph-bold ph-caret-left text-gray-700"></i>
-                        </button>
-                        <button class="slider-btn absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 hover:bg-white rounded-full flex items-center justify-center shadow-lg z-10" onclick="changeSlide(1)">
-                            <i class="ph-bold ph-caret-right text-gray-700"></i>
-                        </button>
-                        <!-- Dots -->
-                        <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
-                            <button class="slider-dot w-2 h-2 rounded-full bg-white/80 hover:bg-white transition-all" data-slide="0"></button>
-                            <button class="slider-dot w-2 h-2 rounded-full bg-white/40 hover:bg-white/80 transition-all" data-slide="1"></button>
-                            <button class="slider-dot w-2 h-2 rounded-full bg-white/40 hover:bg-white/80 transition-all" data-slide="2"></button>
-                        </div>
+                        <ul class="mt-5 space-y-4 text-sm text-slate-600">
+                            <li class="flex gap-3">
+                                <i class="ph-fill ph-check-circle mt-0.5 text-success"></i>
+                                <span>Tiền và trạng thái giao dịch được theo dõi tập trung thay vì trao tay trực tiếp.</span>
+                            </li>
+                            <li class="flex gap-3">
+                                <i class="ph-fill ph-check-circle mt-0.5 text-success"></i>
+                                <span>Lịch sử giao dịch rõ ràng để buyer theo dõi từng bước xử lý.</span>
+                            </li>
+                            <li class="flex gap-3">
+                                <i class="ph-fill ph-check-circle mt-0.5 text-success"></i>
+                                <span>Đội ngũ hỗ trợ sẵn sàng can thiệp khi phát sinh tranh chấp hoặc lỗi bàn giao.</span>
+                            </li>
+                        </ul>
                     </div>
+                </aside>
+            </div>
+        </section>
 
-                    <!-- Promo Blocks Grid -->
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <!-- Google Drive Block -->
-                        <div class="col-span-2 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 hover-lift cursor-pointer border border-blue-200">
-                            <div class="flex items-start justify-between mb-2">
-                                <div>
-                                    <h4 class="font-bold text-blue-700 text-sm">Google Drive | Google One</h4>
-                                    <p class="text-xs text-blue-600">THOẢI MÁI DATA</p>
-                                </div>
-                                <i class="ph-fill ph-google-logo text-2xl text-blue-600"></i>
-                            </div>
-                            <p class="text-lg font-extrabold text-gray-900">CHỈ TỪ <span class="text-blue-600">19K/THÁNG</span></p>
-                            <p class="text-xs text-blue-500">Cho 3 người sử dụng</p>
-                        </div>
-
-                        <!-- VPN Block -->
-                        <div class="bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-xl p-4 hover-lift cursor-pointer text-white">
-                            <div class="flex items-start justify-between mb-2">
-                                <div>
-                                    <h4 class="font-bold text-sm">ỨNG DỤNG VPN</h4>
-                                    <p class="text-xs text-indigo-200">TỐC ĐỘ – BẢO MẬT</p>
-                                </div>
-                                <i class="ph-fill ph-shield-check text-xl"></i>
-                            </div>
-                            <div class="flex gap-1 mt-3">
-                                <span class="text-xs bg-white/20 px-2 py-1 rounded">NORD</span>
-                                <span class="text-xs bg-white/20 px-2 py-1 rounded">EXPRESS</span>
-                            </div>
-                        </div>
-
-                        <!-- AI Block -->
-                        <div class="bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl p-4 hover-lift cursor-pointer text-white">
-                            <div class="flex items-start justify-between mb-2">
-                                <div>
-                                    <h4 class="font-bold text-sm">KHÁM PHÁ AI</h4>
-                                    <p class="text-xs text-purple-200">SIÊU TỐI ƯU</p>
-                                </div>
-                                <i class="ph-fill ph-robot text-xl"></i>
-                            </div>
-                            <div class="flex gap-1 mt-3">
-                                <span class="text-xs bg-white/20 px-2 py-1 rounded">GPT</span>
-                                <span class="text-xs bg-white/20 px-2 py-1 rounded">CLAUDE</span>
-                            </div>
-                        </div>
-
-                        <!-- Steam Wallet -->
-                        <div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl p-4 hover-lift cursor-pointer text-white">
-                            <div class="flex items-start justify-between mb-2">
-                                <div>
-                                    <h4 class="font-bold text-sm">STEAM NẠP WALLET</h4>
-                                    <p class="text-xs text-gray-400">SIÊU TIẾT KIỆM</p>
-                                </div>
-                                <i class="ph-fill ph-game-controller text-xl"></i>
-                            </div>
-                            <p class="text-lg font-extrabold mt-2">CHỈ TỪ <span class="text-green-400">49K</span></p>
-                        </div>
-
-                        <!-- Design Tools -->
-                        <div class="bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl p-4 hover-lift cursor-pointer text-white">
-                            <div class="flex items-start justify-between mb-2">
-                                <div>
-                                    <h4 class="font-bold text-sm">CÔNG CỤ THIẾT KẾ</h4>
-                                    <p class="text-xs text-pink-200">SIÊU ĐA DẠNG</p>
-                                </div>
-                                <i class="ph-fill ph-palette text-xl"></i>
-                            </div>
-                            <div class="flex gap-2 mt-3">
-                                <span class="text-xs bg-white/20 px-2 py-1 rounded">CANVA</span>
-                                <span class="text-xs bg-white/20 px-2 py-1 rounded">FIGMA</span>
-                            </div>
-                        </div>
-
-                        <!-- Microsoft Office -->
-                        <div class="col-span-2 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl p-4 hover-lift cursor-pointer text-white">
-                            <div class="flex items-start justify-between mb-2">
-                                <div>
-                                    <h4 class="font-bold text-sm">MICROSOFT OFFICE BẢN QUYỀN</h4>
-                                    <p class="text-xs text-blue-200">An toàn, hỗ trợ tận tình</p>
-                                </div>
-                                <i class="ph-fill ph-microsoft-logo text-2xl"></i>
-                            </div>
-                            <div class="flex gap-3 mt-3">
-                                <span class="bg-white/20 px-3 py-1 rounded-lg text-sm font-bold">Office 365</span>
-                                <span class="bg-white/20 px-3 py-1 rounded-lg text-sm font-bold">Windows 11 Pro</span>
-                                <span class="bg-white/20 px-3 py-1 rounded-lg text-sm font-bold">Microsoft 365</span>
-                            </div>
-                        </div>
+        <section class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+            <div class="section-shell px-6 py-7 sm:px-8">
+                <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Tại sao giao diện mới dễ dùng hơn</p>
+                        <h2 class="mt-2 text-3xl font-extrabold text-ink">Thông tin rõ ràng, CTA nổi bật, trải nghiệm đỡ rối mắt</h2>
+                    </div>
+                    <a href="/marketplace" class="inline-flex items-center gap-2 self-start rounded-full border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:border-primary hover:text-primary">
+                        Xem toàn bộ sản phẩm
+                        <i class="ph ph-arrow-right"></i>
+                    </a>
+                </div>
+                <div class="mt-8 grid gap-4 md:grid-cols-3">
+                    <div class="rounded-[1.5rem] bg-surface p-5">
+                        <p class="text-sm font-semibold text-slate-500">Trust flow</p>
+                        <h3 class="mt-2 text-xl font-extrabold text-ink">Escrow-first</h3>
+                        <p class="mt-2 text-sm leading-6 text-slate-600">Buyer không phải chuyển tiền hay nhận tài khoản qua những kênh khó kiểm soát.</p>
+                    </div>
+                    <div class="rounded-[1.5rem] bg-surface p-5">
+                        <p class="text-sm font-semibold text-slate-500">Marketplace</p>
+                        <h3 class="mt-2 text-xl font-extrabold text-ink">Danh mục sạch</h3>
+                        <p class="mt-2 text-sm leading-6 text-slate-600">Các nhóm ngành được đẩy lên rõ hơn để tìm sản phẩm nhanh thay vì phải lướt quá nhiều khối quảng cáo.</p>
+                    </div>
+                    <div class="rounded-[1.5rem] bg-surface p-5">
+                        <p class="text-sm font-semibold text-slate-500">Buyer UX</p>
+                        <h3 class="mt-2 text-xl font-extrabold text-ink">Ưu tiên hành động</h3>
+                        <p class="mt-2 text-sm leading-6 text-slate-600">CTA đến marketplace và đăng ký được giữ nổi bật nhưng không gây ồn hoặc quá nhiều màu cạnh tranh nhau.</p>
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <!-- 4. Categories Section (Dynamic from DB) -->
-    <section class="py-12 bg-white">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="text-center mb-10">
-                <h2 class="text-2xl font-bold text-gray-900 mb-2">Danh mục sản phẩm</h2>
-                <p class="text-gray-600">Khám phá các loại tài khoản đa dạng của chúng tôi</p>
+        <section class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+            <div class="mb-6 flex items-end justify-between gap-4">
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Khám phá theo nhóm</p>
+                    <h2 class="mt-2 text-3xl font-extrabold text-ink">Danh mục nổi bật trong tuần</h2>
+                </div>
+                <a href="/marketplace" class="hidden text-sm font-bold text-primary hover:text-primary-dark md:inline-flex">Mở marketplace đầy đủ</a>
             </div>
-
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                <th:block th:each="category : ${parentCategories}">
-                    <a th:href="@{/marketplace(categoryId=${category.categoryId})}" class="group bg-surface rounded-2xl p-5 text-center hover:bg-primary/5 transition-all hover-lift border border-transparent hover:border-primary/20">
-                        <div class="w-14 h-14 mx-auto mb-3 bg-gradient-to-br from-primary to-primary-dark rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                            <i th:class="${'ph ' + category.categoryIcon + ' text-white text-2xl'}"></i>
+            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <th:block th:each="category, iterStat : ${parentCategories}" th:if="${iterStat.index < 8}">
+                    <a th:href="@{/marketplace(categoryId=${category.categoryId})}" class="section-shell p-5 hover-rise">
+                        <div class="flex items-center justify-between">
+                            <div class="flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-sand text-primary">
+                                <i th:class="${'ph ' + category.categoryIcon + ' text-2xl'}"></i>
+                            </div>
+                            <i class="ph ph-arrow-up-right text-lg text-slate-300"></i>
                         </div>
-                        <h3 class="font-bold text-gray-900 mb-1" th:text="${category.categoryName}">Category</h3>
+                        <h3 class="mt-6 text-xl font-extrabold text-ink" th:text="${category.categoryName}">Category</h3>
+                        <p class="mt-2 text-sm leading-6 text-slate-600">Gợi ý những sản phẩm đang được tìm nhiều nhất trong nhóm này.</p>
                     </a>
                 </th:block>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <!-- 5. Products by Category -->
-    <th:block th:if="${not #lists.isEmpty(googleDrivePosts)}">
-    <section class="py-10 bg-surface">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-end mb-6">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                        <i class="ph-fill ph-cloud text-white text-xl"></i>
-                    </div>
-                    <h2 class="text-xl font-bold text-gray-900">Google Drive</h2>
-                </div>
-                <a href="#" class="text-primary font-semibold text-sm hover:underline flex items-center gap-1">
-                    Xem tất cả <i class="ph-bold ph-arrow-right"></i>
-                </a>
-            </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <th:block th:each="post : ${googleDrivePosts}">
-                    <div class="bg-white rounded-xl shadow-card hover-lift cursor-pointer border border-gray-100 overflow-hidden">
-                        <div class="h-36 bg-gradient-to-br from-blue-50 to-blue-100 relative overflow-hidden">
-                            <img th:if="${post.thumbnailUrl}" th:src="${post.thumbnailUrl}" class="w-full h-full object-cover" alt="">
-                            <i th:unless="${post.thumbnailUrl}" class="ph-fill ph-cloud text-blue-300 text-4xl absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></i>
-                            <div class="absolute top-2 right-2 bg-success text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
-                                <i class="ph-bold ph-shield-check"></i> Trung gian
-                            </div>
+        <section class="mx-auto max-w-7xl space-y-8 px-4 py-4 sm:px-6 lg:px-8">
+            <th:block th:if="${not #lists.isEmpty(aiPosts)}">
+                <div class="section-shell p-6 sm:p-8">
+                    <div class="mb-6 flex items-center justify-between gap-4">
+                        <div>
+                            <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Collection</p>
+                            <h2 class="mt-1 text-3xl font-extrabold text-ink">Thế giới AI</h2>
                         </div>
-                        <div class="p-4">
-                            <h3 class="font-bold text-gray-900 text-sm line-clamp-2 mb-2" th:text="${post.title}">Title</h3>
-                            <div class="flex justify-between items-center">
-                                <div class="font-bold text-lg text-gray-900" th:text="${#numbers.formatDecimal(post.price, 0, 'COMMA', 0, 'POINT') + ' ₫'}">Price</div>
-                                <button class="text-primary text-sm font-semibold hover:bg-blue-50 px-3 py-1 rounded transition-colors">Xem</button>
+                        <a href="/marketplace" class="text-sm font-bold text-primary hover:text-primary-dark">Xem thêm</a>
+                    </div>
+                    <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                        <th:block th:each="post : ${aiPosts}">
+                            <div class="grid-card">
+                                <div class="relative h-44 bg-gradient-to-br from-slate-900 via-primary to-cyan-500">
+                                    <img th:src="${post.resolvedThumbnailUrl}" class="h-full w-full object-cover" th:alt="${post.title}">
+                                    <div class="absolute left-4 top-4 rounded-full bg-white/85 px-3 py-1 text-xs font-bold text-ink">Escrow protected</div>
+                                </div>
+                                <div class="p-5">
+                                    <h3 class="line-clamp-2 text-lg font-extrabold text-ink" th:text="${post.title}">Title</h3>
+                                    <p class="mt-2 text-sm text-slate-500" th:text="${post.category != null ? post.category.categoryName : 'Thế giới AI'}">Category</p>
+                                    <div class="mt-5 flex items-center justify-between">
+                                        <span class="text-xl font-extrabold text-primary" th:text="${#numbers.formatDecimal(post.price, 0, 'COMMA', 0, 'POINT') + ' ₫'}">0 ₫</span>
+                                        <a th:href="@{/marketplace/{postId}(postId=${post.postId})}" class="rounded-full border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:border-primary hover:text-primary">Xem</a>
+                                    </div>
+                                </div>
                             </div>
+                        </th:block>
+                    </div>
+                </div>
+            </th:block>
+
+            <div class="grid gap-8 xl:grid-cols-2">
+                <th:block th:if="${not #lists.isEmpty(googleDrivePosts)}">
+                    <div class="section-shell p-6 sm:p-8">
+                        <div class="mb-6 flex items-center justify-between gap-4">
+                            <div>
+                                <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Hot picks</p>
+                                <h2 class="mt-1 text-2xl font-extrabold text-ink">Google Drive</h2>
+                            </div>
+                            <span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-primary">Storage</span>
+                        </div>
+                        <div class="space-y-4">
+                            <th:block th:each="post : ${googleDrivePosts}">
+                                <a th:href="@{/marketplace/{postId}(postId=${post.postId})}" class="flex items-center gap-4 rounded-[1.5rem] border border-slate-200 p-4 hover-rise">
+                                    <div class="flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-[1.25rem] bg-blue-50">
+                                        <img th:src="${post.resolvedThumbnailUrl}" class="h-full w-full object-cover" th:alt="${post.title}">
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <h3 class="line-clamp-1 text-base font-extrabold text-ink" th:text="${post.title}">Title</h3>
+                                        <p class="mt-1 line-clamp-2 text-sm text-slate-500">Dung lượng, workspace và gói lưu trữ đang được tìm kiếm nhiều.</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-lg font-extrabold text-primary" th:text="${#numbers.formatDecimal(post.price, 0, 'COMMA', 0, 'POINT') + ' ₫'}">0 ₫</p>
+                                        <p class="text-xs font-semibold text-slate-400">Chi tiết</p>
+                                    </div>
+                                </a>
+                            </th:block>
                         </div>
                     </div>
                 </th:block>
-                <!-- Placeholder if empty -->
-                <th:block th:if="${#lists.isEmpty(googleDrivePosts)}">
-                    <div class="col-span-4 text-center py-8 text-gray-500">
-                        <i class="ph-fill ph-folder-open text-4xl mb-2"></i>
-                        <p>Chưa có sản phẩm trong danh mục này</p>
-                    </div>
-                </th:block>
-            </div>
-        </div>
-    </section>
-    </th:block>
 
-    <th:block th:if="${not #lists.isEmpty(vpnPosts)}">
-    <section class="py-10 bg-white">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-end mb-6">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center">
-                        <i class="ph-fill ph-shield-check text-white text-xl"></i>
-                    </div>
-                    <h2 class="text-xl font-bold text-gray-900">VPN, Bảo mật mạng</h2>
-                </div>
-                <a href="#" class="text-primary font-semibold text-sm hover:underline flex items-center gap-1">
-                    Xem tất cả <i class="ph-bold ph-arrow-right"></i>
-                </a>
-            </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <th:block th:each="post : ${vpnPosts}">
-                    <div class="bg-surface rounded-xl shadow-card hover-lift cursor-pointer border border-gray-100 overflow-hidden">
-                        <div class="h-36 bg-gradient-to-br from-indigo-50 to-indigo-100 relative overflow-hidden">
-                            <img th:if="${post.thumbnailUrl}" th:src="${post.thumbnailUrl}" class="w-full h-full object-cover" alt="">
-                            <i th:unless="${post.thumbnailUrl}" class="ph-fill ph-shield-check text-indigo-300 text-4xl absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></i>
-                            <div class="absolute top-2 right-2 bg-success text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
-                                <i class="ph-bold ph-shield-check"></i> Trung gian
+                <th:block th:if="${not #lists.isEmpty(vpnPosts)}">
+                    <div class="section-shell p-6 sm:p-8">
+                        <div class="mb-6 flex items-center justify-between gap-4">
+                            <div>
+                                <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Trust picks</p>
+                                <h2 class="mt-1 text-2xl font-extrabold text-ink">VPN, Bảo mật mạng</h2>
                             </div>
+                            <span class="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-success">Security</span>
                         </div>
-                        <div class="p-4">
-                            <h3 class="font-bold text-gray-900 text-sm line-clamp-2 mb-2" th:text="${post.title}">Title</h3>
-                            <div class="flex justify-between items-center">
-                                <div class="font-bold text-lg text-gray-900" th:text="${#numbers.formatDecimal(post.price, 0, 'COMMA', 0, 'POINT') + ' ₫'}">Price</div>
-                                <button class="text-primary text-sm font-semibold hover:bg-blue-50 px-3 py-1 rounded transition-colors">Xem</button>
-                            </div>
-                        </div>
-                    </div>
-                </th:block>
-            </div>
-        </div>
-    </section>
-    </th:block>
-
-    <th:block th:if="${not #lists.isEmpty(aiPosts)}">
-    <section class="py-10 bg-surface">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-end mb-6">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center">
-                        <i class="ph-fill ph-robot text-white text-xl"></i>
-                    </div>
-                    <h2 class="text-xl font-bold text-gray-900">Thế giới AI</h2>
-                </div>
-                <a href="#" class="text-primary font-semibold text-sm hover:underline flex items-center gap-1">
-                    Xem tất cả <i class="ph-bold ph-arrow-right"></i>
-                </a>
-            </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <th:block th:each="post : ${aiPosts}">
-                    <div class="bg-white rounded-xl shadow-card hover-lift cursor-pointer border border-gray-100 overflow-hidden">
-                        <div class="h-36 bg-gradient-to-br from-purple-50 to-purple-100 relative overflow-hidden">
-                            <img th:if="${post.thumbnailUrl}" th:src="${post.thumbnailUrl}" class="w-full h-full object-cover" alt="">
-                            <i th:unless="${post.thumbnailUrl}" class="ph-fill ph-robot text-purple-300 text-4xl absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></i>
-                            <div class="absolute top-2 right-2 bg-success text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
-                                <i class="ph-bold ph-shield-check"></i> Trung gian
-                            </div>
-                        </div>
-                        <div class="p-4">
-                            <h3 class="font-bold text-gray-900 text-sm line-clamp-2 mb-2" th:text="${post.title}">Title</h3>
-                            <div class="flex justify-between items-center">
-                                <div class="font-bold text-lg text-gray-900" th:text="${#numbers.formatDecimal(post.price, 0, 'COMMA', 0, 'POINT') + ' ₫'}">Price</div>
-                                <button class="text-primary text-sm font-semibold hover:bg-blue-50 px-3 py-1 rounded transition-colors">Xem</button>
-                            </div>
+                        <div class="space-y-4">
+                            <th:block th:each="post : ${vpnPosts}">
+                                <a th:href="@{/marketplace/{postId}(postId=${post.postId})}" class="flex items-center gap-4 rounded-[1.5rem] border border-slate-200 p-4 hover-rise">
+                                    <div class="flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-[1.25rem] bg-green-50">
+                                        <img th:src="${post.resolvedThumbnailUrl}" class="h-full w-full object-cover" th:alt="${post.title}">
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <h3 class="line-clamp-1 text-base font-extrabold text-ink" th:text="${post.title}">Title</h3>
+                                        <p class="mt-1 line-clamp-2 text-sm text-slate-500">Những gói bảo mật và VPN thường được buyer chốt nhanh nhất.</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-lg font-extrabold text-primary" th:text="${#numbers.formatDecimal(post.price, 0, 'COMMA', 0, 'POINT') + ' ₫'}">0 ₫</p>
+                                        <p class="text-xs font-semibold text-slate-400">Chi tiết</p>
+                                    </div>
+                                </a>
+                            </th:block>
                         </div>
                     </div>
                 </th:block>
             </div>
-        </div>
-    </section>
-    </th:block>
+        </section>
 
-    <th:block th:if="${not #lists.isEmpty(giftCardPosts)}">
-    <section class="py-10 bg-white">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-end mb-6">
+        <section class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+            <div class="rounded-[2rem] bg-ink px-6 py-8 text-white shadow-card sm:px-8">
+                <div class="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+                    <div>
+                        <p class="text-sm font-semibold uppercase tracking-[0.18em] text-white/50">FAQ nhanh</p>
+                        <h2 class="mt-2 text-3xl font-extrabold">Buyer mới cần biết gì trước khi giao dịch?</h2>
+                        <p class="mt-3 max-w-md text-sm leading-7 text-white/70">Trang chủ mới tập trung giúp người dùng hiểu rõ quy trình và đi thẳng đến marketplace thay vì phải đọc quá nhiều khối quảng bá rời rạc.</p>
+                    </div>
+                    <div class="space-y-3">
+                        <details class="rounded-[1.5rem] border border-white/10 bg-white/5 px-5 py-4">
+                            <summary class="cursor-pointer list-none text-base font-bold">Làm sao để mua tài khoản an toàn?</summary>
+                            <p class="mt-3 text-sm leading-6 text-white/70">Chọn sản phẩm, vào chi tiết, checkout và theo dõi giao dịch pending trong lịch sử mua hàng để TrustBridge xử lý trung gian.</p>
+                        </details>
+                        <details class="rounded-[1.5rem] border border-white/10 bg-white/5 px-5 py-4">
+                            <summary class="cursor-pointer list-none text-base font-bold">Tôi có thể xem credential ngay không?</summary>
+                            <p class="mt-3 text-sm leading-6 text-white/70">Không. Buyer-facing UI luôn ẩn credential cho đến khi quy trình bàn giao phù hợp được xử lý bởi hệ thống trung gian.</p>
+                        </details>
+                        <details class="rounded-[1.5rem] border border-white/10 bg-white/5 px-5 py-4">
+                            <summary class="cursor-pointer list-none text-base font-bold">Seller có được hỗ trợ nếu có tranh chấp?</summary>
+                            <p class="mt-3 text-sm leading-6 text-white/70">Có. Hệ thống lưu trạng thái giao dịch và hướng đến dispute flow để admin can thiệp khi cần.</p>
+                        </details>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="mt-8 bg-white border-t border-slate-200">
+        <div class="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-4 lg:px-8">
+            <div>
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center">
-                        <i class="ph-fill ph-ticket text-white text-xl"></i>
+                    <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-white">
+                        <i class="ph-fill ph-shield-check text-xl"></i>
                     </div>
-                    <h2 class="text-xl font-bold text-gray-900">Gift Card</h2>
+                    <span class="text-lg font-extrabold text-ink">TrustBridge</span>
                 </div>
-                <a href="#" class="text-primary font-semibold text-sm hover:underline flex items-center gap-1">
-                    Xem tất cả <i class="ph-bold ph-arrow-right"></i>
-                </a>
+                <p class="mt-4 text-sm leading-6 text-slate-500">Nền tảng trung gian giúp buyer và seller giao dịch tài khoản số gọn gàng, rõ ràng và an toàn hơn.</p>
             </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <th:block th:each="post : ${giftCardPosts}">
-                    <div class="bg-surface rounded-xl shadow-card hover-lift cursor-pointer border border-gray-100 overflow-hidden">
-                        <div class="h-36 bg-gradient-to-br from-green-50 to-green-100 relative overflow-hidden">
-                            <img th:if="${post.thumbnailUrl}" th:src="${post.thumbnailUrl}" class="w-full h-full object-cover" alt="">
-                            <i th:unless="${post.thumbnailUrl}" class="ph-fill ph-ticket text-green-300 text-4xl absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></i>
-                            <div class="absolute top-2 right-2 bg-success text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
-                                <i class="ph-bold ph-shield-check"></i> Trung gian
-                            </div>
-                        </div>
-                        <div class="p-4">
-                            <h3 class="font-bold text-gray-900 text-sm line-clamp-2 mb-2" th:text="${post.title}">Title</h3>
-                            <div class="flex justify-between items-center">
-                                <div class="font-bold text-lg text-gray-900" th:text="${#numbers.formatDecimal(post.price, 0, 'COMMA', 0, 'POINT') + ' ₫'}">Price</div>
-                                <button class="text-primary text-sm font-semibold hover:bg-blue-50 px-3 py-1 rounded transition-colors">Xem</button>
-                            </div>
-                        </div>
-                    </div>
-                </th:block>
+            <div>
+                <h3 class="text-sm font-extrabold uppercase tracking-[0.18em] text-slate-400">Marketplace</h3>
+                <ul class="mt-4 space-y-3 text-sm text-slate-600">
+                    <li><a href="/marketplace" class="hover:text-primary">Tất cả sản phẩm</a></li>
+                    <li><a href="/marketplace" class="hover:text-primary">Subscription</a></li>
+                    <li><a href="/marketplace" class="hover:text-primary">Software license</a></li>
+                </ul>
             </div>
-        </div>
-    </section>
-    </th:block>
-
-    <th:block th:if="${not #lists.isEmpty(microsoftPosts)}">
-    <section class="py-10 bg-surface">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-end mb-6">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-blue-700 rounded-lg flex items-center justify-center">
-                        <i class="ph-fill ph-microsoft-logo text-white text-xl"></i>
-                    </div>
-                    <h2 class="text-xl font-bold text-gray-900">Windows, Office</h2>
-                </div>
-                <a href="#" class="text-primary font-semibold text-sm hover:underline flex items-center gap-1">
-                    Xem tất cả <i class="ph-bold ph-arrow-right"></i>
-                </a>
+            <div>
+                <h3 class="text-sm font-extrabold uppercase tracking-[0.18em] text-slate-400">Tài khoản</h3>
+                <ul class="mt-4 space-y-3 text-sm text-slate-600">
+                    <li><a href="/login" class="hover:text-primary">Đăng nhập</a></li>
+                    <li><a href="/register" class="hover:text-primary">Đăng ký</a></li>
+                    <li><a href="/buyer/purchases" class="hover:text-primary">Lịch sử mua hàng</a></li>
+                </ul>
             </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <th:block th:each="post : ${microsoftPosts}">
-                    <div class="bg-white rounded-xl shadow-card hover-lift cursor-pointer border border-gray-100 overflow-hidden">
-                        <div class="h-36 bg-gradient-to-br from-blue-50 to-blue-100 relative overflow-hidden">
-                            <img th:if="${post.thumbnailUrl}" th:src="${post.thumbnailUrl}" class="w-full h-full object-cover" alt="">
-                            <i th:unless="${post.thumbnailUrl}" class="ph-fill ph-microsoft-logo text-blue-300 text-4xl absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></i>
-                            <div class="absolute top-2 right-2 bg-success text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
-                                <i class="ph-bold ph-shield-check"></i> Trung gian
-                            </div>
-                        </div>
-                        <div class="p-4">
-                            <h3 class="font-bold text-gray-900 text-sm line-clamp-2 mb-2" th:text="${post.title}">Title</h3>
-                            <div class="flex justify-between items-center">
-                                <div class="font-bold text-lg text-gray-900" th:text="${#numbers.formatDecimal(post.price, 0, 'COMMA', 0, 'POINT') + ' ₫'}">Price</div>
-                                <button class="text-primary text-sm font-semibold hover:bg-blue-50 px-3 py-1 rounded transition-colors">Xem</button>
-                            </div>
-                        </div>
-                    </div>
-                </th:block>
+            <div>
+                <h3 class="text-sm font-extrabold uppercase tracking-[0.18em] text-slate-400">Niềm tin & hỗ trợ</h3>
+                <ul class="mt-4 space-y-3 text-sm text-slate-600">
+                    <li><a href="#" class="hover:text-primary">Điều khoản dịch vụ</a></li>
+                    <li><a href="#" class="hover:text-primary">Chính sách bảo mật</a></li>
+                    <li><a href="#" class="hover:text-primary">Liên hệ hỗ trợ</a></li>
+                </ul>
             </div>
         </div>
-    </section>
-    </th:block>
-
-    <!-- 6. Why Choose Us -->
-    <section class="py-16 bg-white">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="text-center mb-12">
-                <h2 class="text-2xl font-bold text-gray-900 mb-3">Tại sao chọn TrustBridge?</h2>
-                <p class="text-gray-600">Chúng tôi cam kết mang đến trải nghiệm giao dịch an toàn và thuận tiện nhất</p>
-            </div>
-
-            <div class="grid md:grid-cols-4 gap-6">
-                <div class="text-center p-6 rounded-xl hover-lift">
-                    <div class="w-14 h-14 mx-auto mb-4 bg-primary/10 rounded-2xl flex items-center justify-center">
-                        <i class="ph-fill ph-lightning text-primary text-2xl"></i>
-                    </div>
-                    <h3 class="font-bold text-gray-900 mb-2">Giao hàng tức thì</h3>
-                    <p class="text-sm text-gray-600">Nhận thông tin tài khoản ngay sau khi thanh toán</p>
-                </div>
-                <div class="text-center p-6 rounded-xl hover-lift">
-                    <div class="w-14 h-14 mx-auto mb-4 bg-success/10 rounded-2xl flex items-center justify-center">
-                        <i class="ph-fill ph-shield-check text-success text-2xl"></i>
-                    </div>
-                    <h3 class="font-bold text-gray-900 mb-2">Bảo vệ trung gian</h3>
-                    <p class="text-sm text-gray-600">Tiền được giữ an toàn cho đến khi xác nhận</p>
-                </div>
-                <div class="text-center p-6 rounded-xl hover-lift">
-                    <div class="w-14 h-14 mx-auto mb-4 bg-warning/10 rounded-2xl flex items-center justify-center">
-                        <i class="ph-fill ph-verified text-warning text-2xl"></i>
-                    </div>
-                    <h3 class="font-bold text-gray-900 mb-2">Sản phẩm đã xác minh</h3>
-                    <p class="text-sm text-gray-600">Tài khoản được kiểm duyệt trước khi đăng bán</p>
-                </div>
-                <div class="text-center p-6 rounded-xl hover-lift">
-                    <div class="w-14 h-14 mx-auto mb-4 bg-purple-100 rounded-2xl flex items-center justify-center">
-                        <i class="ph-fill ph-headset text-purple-600 text-2xl"></i>
-                    </div>
-                    <h3 class="font-bold text-gray-900 mb-2">Hỗ trợ 24/7</h3>
-                    <p class="text-sm text-gray-600">Đội ngũ hỗ trợ luôn sẵn sàng giải đáp mọi thắc mắc</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- 7. Stats & Testimonials -->
-    <section class="py-14 bg-surface">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <!-- Stats -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-14">
-                <div class="text-center">
-                    <div class="text-3xl md:text-4xl font-extrabold text-primary mb-1">50K+</div>
-                    <div class="text-gray-600 font-medium text-sm">Người dùng</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-3xl md:text-4xl font-extrabold text-primary mb-1">10K+</div>
-                    <div class="text-gray-600 font-medium text-sm">Giao dịch</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-3xl md:text-4xl font-extrabold text-primary mb-1">98%</div>
-                    <div class="text-gray-600 font-medium text-sm">Hài lòng</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-3xl md:text-4xl font-extrabold text-primary mb-1">5 tỷ+</div>
-                    <div class="text-gray-600 font-medium text-sm">Giá trị giao dịch</div>
-                </div>
-            </div>
-
-            <!-- Testimonials -->
-            <div class="grid md:grid-cols-3 gap-6">
-                <div class="bg-white rounded-xl p-5 border border-gray-100">
-                    <div class="flex items-center gap-1 mb-3">
-                        <i class="ph-fill ph-star text-warning"></i>
-                        <i class="ph-fill ph-star text-warning"></i>
-                        <i class="ph-fill ph-star text-warning"></i>
-                        <i class="ph-fill ph-star text-warning"></i>
-                        <i class="ph-fill ph-star text-warning"></i>
-                    </div>
-                    <p class="text-gray-700 text-sm mb-4">"Mua acc rất an toàn, nhận thông tin ngay sau thanh toán!"</p>
-                    <div class="flex items-center gap-2">
-                        <div class="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center">
-                            <i class="ph-fill ph-user text-primary text-sm"></i>
-                        </div>
-                        <div class="font-semibold text-gray-900 text-sm">Nguyễn Văn A</div>
-                    </div>
-                </div>
-                <div class="bg-white rounded-xl p-5 border border-gray-100">
-                    <div class="flex items-center gap-1 mb-3">
-                        <i class="ph-fill ph-star text-warning"></i>
-                        <i class="ph-fill ph-star text-warning"></i>
-                        <i class="ph-fill ph-star text-warning"></i>
-                        <i class="ph-fill ph-star text-warning"></i>
-                        <i class="ph-fill ph-star text-warning"></i>
-                    </div>
-                    <p class="text-gray-700 text-sm mb-4">"Dịch vụ trung gian rất uy tín, đã bán được nhiều acc!"</p>
-                    <div class="flex items-center gap-2">
-                        <div class="w-8 h-8 bg-success/20 rounded-full flex items-center justify-center">
-                            <i class="ph-fill ph-user text-success text-sm"></i>
-                        </div>
-                        <div class="font-semibold text-gray-900 text-sm">Trần Thị B</div>
-                    </div>
-                </div>
-                <div class="bg-white rounded-xl p-5 border border-gray-100">
-                    <div class="flex items-center gap-1 mb-3">
-                        <i class="ph-fill ph-star text-warning"></i>
-                        <i class="ph-fill ph-star text-warning"></i>
-                        <i class="ph-fill ph-star text-warning"></i>
-                        <i class="ph-fill ph-star text-warning"></i>
-                        <i class="ph-fill ph-star text-warning"></i>
-                    </div>
-                    <p class="text-gray-700 text-sm mb-4">"Hỗ trợ nhanh chóng, giải quyết khiếu nại trong 30 phút!"</p>
-                    <div class="flex items-center gap-2">
-                        <div class="w-8 h-8 bg-warning/20 rounded-full flex items-center justify-center">
-                            <i class="ph-fill ph-user text-warning text-sm"></i>
-                        </div>
-                        <div class="font-semibold text-gray-900 text-sm">Lê Hoàng C</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- 8. FAQ -->
-    <section class="py-14 bg-white">
-        <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="text-center mb-10">
-                <h2 class="text-2xl font-bold text-gray-900 mb-2">Câu hỏi thường gặp</h2>
-            </div>
-            <div class="space-y-3">
-                <div class="bg-surface rounded-lg border border-gray-200 overflow-hidden">
-                    <details class="group">
-                        <summary class="flex items-center justify-between p-4 cursor-pointer font-semibold text-gray-900 text-sm">
-                            <span>Làm thế nào để mua tài khoản?</span>
-                            <i class="ph-bold ph-caret-down group-open:rotate-180 transition-transform text-primary"></i>
-                        </summary>
-                        <div class="px-4 pb-4 text-gray-600 text-sm">
-                            Tìm kiếm tài khoản mong muốn, nhấn "Mua ngay" và thanh toán. Thông tin sẽ được gửi ngay lập tức.
-                        </div>
-                    </details>
-                </div>
-                <div class="bg-surface rounded-lg border border-gray-200 overflow-hidden">
-                    <details class="group">
-                        <summary class="flex items-center justify-between p-4 cursor-pointer font-semibold text-gray-900 text-sm">
-                            <span>Dịch vụ trung gian hoạt động như thế nào?</span>
-                            <i class="ph-bold ph-caret-down group-open:rotate-180 transition-transform text-primary"></i>
-                        </summary>
-                        <div class="px-4 pb-4 text-gray-600 text-sm">
-                            Tiền được giữ bởi TrustBridge. Sau khi xác nhận tài khoản, tiền sẽ được chuyển cho người bán.
-                        </div>
-                    </details>
-                </div>
-                <div class="bg-surface rounded-lg border border-gray-200 overflow-hidden">
-                    <details class="group">
-                        <summary class="flex items-center justify-between p-4 cursor-pointer font-semibold text-gray-900 text-sm">
-                            <span>Làm sao để trở thành người bán?</span>
-                            <i class="ph-bold ph-caret-down group-open:rotate-180 transition-transform text-primary"></i>
-                        </summary>
-                        <div class="px-4 pb-4 text-gray-600 text-sm">
-                            Đăng ký tài khoản và xác minh danh tính (KYC). Sau khi được duyệt, bạn có thể đăng bán tài khoản.
-                        </div>
-                    </details>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- 9. Footer -->
-    <footer class="bg-gray-900 text-white pt-12 pb-6">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10">
-                <div>
-                    <div class="flex items-center gap-2 mb-4">
-                        <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                            <i class="ph-fill ph-shield-check text-white text-lg"></i>
-                        </div>
-                        <span class="font-bold text-lg">TrustBridge</span>
-                    </div>
-                    <p class="text-gray-400 text-sm">Nền tảng trung gian an toàn nhất để giao dịch tài sản số.</p>
-                </div>
-                <div>
-                    <h4 class="font-bold mb-3 text-sm">Chợ trung gian</h4>
-                    <ul class="space-y-2 text-sm text-gray-400">
-                        <li><a href="#" class="hover:text-white">Tài khoản Game</a></li>
-                        <li><a href="#" class="hover:text-white">Mạng xã hội</a></li>
-                        <li><a href="#" class="hover:text-white">Phần mềm</a></li>
-                        <li><a href="#" class="hover:text-white">Gift Card</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h4 class="font-bold mb-3 text-sm">Hỗ trợ</h4>
-                    <ul class="space-y-2 text-sm text-gray-400">
-                        <li><a href="#" class="hover:text-white">Trung tâm trợ giúp</a></li>
-                        <li><a href="#" class="hover:text-white">Liên hệ</a></li>
-                        <li><a href="#" class="hover:text-white">Khiếu nại</a></li>
-                    </ul>
-                </div>
-                <div>
-                    <h4 class="font-bold mb-3 text-sm">Pháp lý</h4>
-                    <ul class="space-y-2 text-sm text-gray-400">
-                        <li><a href="#" class="hover:text-white">Điều khoản</a></li>
-                        <li><a href="#" class="hover:text-white">Bảo mật</a></li>
-                    </ul>
-                </div>
-            </div>
-            <div class="pt-6 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
-                <p class="text-gray-400 text-sm">&copy; 2026 TrustBridge Market</p>
-                <div class="flex items-center gap-3">
-                    <a href="#" class="w-8 h-8 bg-gray-800 hover:bg-primary rounded-lg flex items-center justify-center">
-                        <i class="ph-fill ph-facebook-logo"></i>
-                    </a>
-                    <a href="#" class="w-8 h-8 bg-gray-800 hover:bg-primary rounded-lg flex items-center justify-center">
-                        <i class="ph-fill ph-discord-logo"></i>
-                    </a>
-                </div>
+        <div class="border-t border-slate-200">
+            <div class="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-5 text-sm text-slate-500 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
+                <p>&copy; 2026 TrustBridge Market. All rights reserved.</p>
+                <p>Redesigned homepage for a cleaner, calmer, more conversion-friendly first impression.</p>
             </div>
         </div>
     </footer>
-
-    <!-- Slider JavaScript -->
-    <script>
-        let currentSlide = 0;
-        const totalSlides = 3;
-        let autoSlideInterval;
-
-        function showSlide(n) {
-            const slides = document.querySelectorAll('.slider-slide');
-            const dots = document.querySelectorAll('.slider-dot');
-
-            currentSlide = ((n % totalSlides) + totalSlides) % totalSlides;
-
-            slides.forEach((slide, index) => {
-                slide.classList.toggle('hidden', index !== currentSlide);
-            });
-
-            dots.forEach((dot, index) => {
-                dot.classList.toggle('bg-white', index === currentSlide);
-                dot.classList.toggle('bg-white/40', index !== currentSlide);
-                dot.classList.toggle('bg-white/80', index === currentSlide);
-            });
-        }
-
-        function changeSlide(n) {
-            showSlide(currentSlide + n);
-            resetAutoSlide();
-        }
-
-        function startAutoSlide() {
-            autoSlideInterval = setInterval(() => {
-                showSlide(currentSlide + 1);
-            }, 5000);
-        }
-
-        function resetAutoSlide() {
-            clearInterval(autoSlideInterval);
-            startAutoSlide();
-        }
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', function() {
-            showSlide(0);
-            startAutoSlide();
-
-            // Dot click handlers
-            document.querySelectorAll('.slider-dot').forEach((dot, index) => {
-                dot.addEventListener('click', () => {
-                    showSlide(index);
-                    resetAutoSlide();
-                });
-            });
-        });
-    </script>
 </body>
 
 </html>

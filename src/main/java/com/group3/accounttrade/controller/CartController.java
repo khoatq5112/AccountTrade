@@ -57,8 +57,23 @@ public class CartController {
             return ResponseEntity.status(401).body(Map.of("message", "Please login first"));
         }
 
-        List<Cart> cartItems = cartService.getUserCart(user);
+        List<CartService.CartItemDto> cartItems = cartService.getUserCartItems(user);
         return ResponseEntity.ok(cartItems);
+    }
+
+    @GetMapping("/count")
+    public ResponseEntity<?> getCartCount() {
+        User user = getCurrentUser();
+        if (user == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "Please login first"));
+        }
+
+        // Sellers don't have a cart, return 0
+        if (user.getRole() != null && "Seller".equalsIgnoreCase(user.getRole().getRoleName())) {
+            return ResponseEntity.ok(Map.of("count", 0));
+        }
+
+        return ResponseEntity.ok(Map.of("count", cartService.getCartItemCount(user)));
     }
 
     @DeleteMapping("/remove/{postId}")

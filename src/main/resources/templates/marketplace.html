@@ -28,7 +28,15 @@
         }
     </script>
     <style type="text/tailwindcss">
-        body { background-color: #f5f7fa; }
+        html, body { height: 100%; }
+        body { 
+            background-color: #f5f7fa;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        main { flex: 1 0 auto; }
+        footer { flex-shrink: 0; }
         .hover-lift { transition: transform 0.25s ease, box-shadow 0.25s ease; }
         .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1); }
 
@@ -40,7 +48,7 @@
         }
         .range-slider input[type="range"] {
             position: absolute;
-            pointer-events: auto;
+            pointer-events: none;
             -webkit-appearance: none;
             z-index: 2;
             height: 6px;
@@ -48,6 +56,9 @@
             left: 0;
             bottom: 0;
             background: transparent;
+        }
+        .range-slider #minPrice {
+            z-index: 3;
         }
         .range-slider input[type="range"]::-webkit-slider-thumb {
             pointer-events: all;
@@ -150,6 +161,11 @@
                 </div>
                 <div class="hidden md:flex flex-1 max-w-xl mx-8 relative">
                     <form th:action="@{/marketplace}" method="get" class="relative w-full" id="searchForm">
+                        <input type="hidden" name="categoryId" th:if="${categoryId != null}" th:value="${categoryId}">
+                        <input type="hidden" name="minPrice" th:if="${minPriceValue > 0}" th:value="${minPriceValue}">
+                        <input type="hidden" name="maxPrice" th:if="${maxPriceValue < 10000000}" th:value="${maxPriceValue}">
+                        <input type="hidden" name="sort" th:value="${sort}">
+                        <input type="hidden" name="size" th:value="${pageSize}">
                         <input type="text" name="q" id="searchInput" th:value="${keyword}" placeholder="Tìm kiếm sản phẩm..."
                             class="w-full py-2.5 px-4 pl-11 bg-surface border border-gray-200 rounded-full text-sm focus:outline-none focus:border-primary"
                             autocomplete="off">
@@ -160,8 +176,10 @@
                     <div id="searchSuggestions" class="search-suggestions"></div>
                 </div>
                 <div class="flex items-center gap-3">
-                    <a href="#" class="relative p-2 text-gray-600 hover:text-primary">
+                    <a th:if="${canPurchase}" href="/buyer/cart" class="relative p-2 text-gray-600 hover:text-primary">
                         <i class="ph-fill ph-shopping-cart text-xl"></i>
+                        <span id="cartCountBadge"
+                              class="absolute -right-1 -top-1 hidden min-w-[1.25rem] rounded-full bg-primary px-1.5 py-0.5 text-center text-[0.7rem] font-bold leading-none text-white">0</span>
                     </a>
                     <!-- Show login or user menu based on auth status -->
                     <th:block th:if="${isAuthenticated}">
@@ -170,14 +188,15 @@
                                 <div class="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
                                     <i class="ph-fill ph-user text-white"></i>
                                 </div>
-                                <span class="hidden sm:inline">Tài khoản</span>
+                                <span class="hidden sm:inline" th:text="${currentUsername != null ? currentUsername : 'Tài khoản'}">Tài khoản</span>
                                 <i class="ph ph-caret-down"></i>
                             </button>
                             <div class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-100 py-2 hidden" id="userDropdown">
-                                <a href="/buyer/dashboard" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                                    <i class="ph ph-user mr-2"></i>Trang cá nhân
+                                <a th:href="${accountDashboardUrl}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                                    <i class="ph ph-user mr-2"></i>
+                                    <span th:text="${currentRole == 'Seller' ? 'Kênh bán' : (currentRole == 'Admin' ? 'Quản trị' : 'Trang cá nhân')}">Trang cá nhân</span>
                                 </a>
-                                <a href="/buyer/cart" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                                <a th:if="${canPurchase}" href="/buyer/cart" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
                                     <i class="ph ph-shopping-cart mr-2"></i>Giỏ hàng
                                 </a>
                                 <hr class="my-2 border-gray-100">
@@ -196,6 +215,7 @@
     </nav>
 
     <!-- Main Content -->
+    <main class="flex-1">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div class="flex gap-6">
             <!-- Sidebar Filters -->
@@ -206,21 +226,21 @@
                             <i class="ph-fill ph-funnel text-primary"></i>
                             Bộ lọc
                         </h3>
-                        <a th:href="@{/marketplace}" class="text-xs text-primary hover:underline">Xóa lọc</a>
+                        <a th:href="@{/marketplace(sort=${sort}, size=${pageSize})}" class="text-xs text-primary hover:underline">Xóa lọc</a>
                     </div>
 
                     <!-- Categories Filter -->
                     <div class="p-4 border-b border-gray-100">
                         <h4 class="font-semibold text-gray-900 mb-3 text-sm">Danh mục</h4>
                         <div class="space-y-1 max-h-64 overflow-y-auto">
-                            <a th:href="@{/marketplace(q=${keyword})}"
+                            <a th:href="@{/marketplace(q=${keyword}, minPrice=${minPriceValue > 0 ? minPriceValue : null}, maxPrice=${maxPriceValue < 10000000 ? maxPriceValue : null}, sort=${sort}, size=${pageSize})}"
                                 class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors"
                                 th:style="${categoryId == null ? 'background-color: #e0f2fe; color: #137fec;' : 'color: #4b5563; background-color: #f9fafb;'}"
                                 th:classappend="${categoryId == null ? '' : 'hover:bg-gray-50'}">
                                 <i class="ph ph-grid-four"></i> Tất cả
                             </a>
-                            <th:block th:each="cat : ${parentCategories}">
-                                <a th:href="@{/marketplace(categoryId=${cat.categoryId}, q=${keyword})}"
+                            <th:block th:each="cat : ${categories}">
+                                <a th:href="@{/marketplace(categoryId=${cat.categoryId}, q=${keyword}, minPrice=${minPriceValue > 0 ? minPriceValue : null}, maxPrice=${maxPriceValue < 10000000 ? maxPriceValue : null}, sort=${sort}, size=${pageSize})}"
                                     class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors"
                                     th:style="${categoryId == cat.categoryId ? 'background-color: #e0f2fe; color: #137fec;' : 'color: #4b5563; background-color: #f9fafb;'}"
                                     th:classappend="${categoryId == cat.categoryId ? '' : 'hover:bg-gray-50'}">
@@ -245,8 +265,8 @@
                         <div class="range-slider mb-2">
                             <div class="track"></div>
                             <div class="range-fill" id="rangeFill"></div>
-                            <input type="range" id="minPrice" name="minPrice" min="0" max="10000000" step="50000" value="0">
-                            <input type="range" id="maxPrice" name="maxPrice" min="0" max="10000000" step="50000" value="10000000">
+                            <input type="range" id="minPrice" name="minPrice" min="0" max="10000000" step="50000" th:value="${minPriceValue}">
+                            <input type="range" id="maxPrice" name="maxPrice" min="0" max="10000000" step="50000" th:value="${maxPriceValue}">
                         </div>
 
                         <!-- Apply Button -->
@@ -281,9 +301,17 @@
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
                     <div class="flex flex-wrap items-center justify-between gap-4">
                         <div class="text-sm text-gray-600">
-                            <span th:text="${totalPosts}">0</span> sản phẩm
+                            Hiển thị <span th:text="${fromItem}">0</span> - <span th:text="${toItem}">0</span> trên <span th:text="${totalPosts}">0</span> sản phẩm
                         </div>
                         <div class="flex items-center gap-4">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm text-gray-500">Mỗi trang:</span>
+                                <select id="pageSizeSelect" onchange="changePageSize(this.value)" class="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-primary">
+                                    <option value="12">12</option>
+                                    <option value="24">24</option>
+                                    <option value="48">48</option>
+                                </select>
+                            </div>
                             <div class="flex items-center gap-2">
                                 <span class="text-sm text-gray-500">Sắp xếp:</span>
                                 <select id="sortSelect" onchange="sortProducts(this.value)" class="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-primary">
@@ -299,24 +327,23 @@
                 <!-- Products Grid -->
                 <div th:if="${not #lists.isEmpty(posts)}" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     <th:block th:each="post : ${posts}">
-                        <div class="bg-white rounded-xl shadow-card hover-lift cursor-pointer border border-gray-100 overflow-hidden">
+                        <div class="bg-white rounded-xl shadow-card hover-lift border border-gray-100 overflow-hidden">
                             <div class="h-44 bg-gradient-to-br from-blue-50 to-blue-100 relative overflow-hidden">
-                                <img th:if="${post.thumbnailUrl}" th:src="${post.thumbnailUrl}" class="w-full h-full object-cover" alt="">
-                                <div th:unless="${post.thumbnailUrl}" class="w-full h-full flex items-center justify-center">
-                                    <i class="ph-fill ph-package text-blue-300 text-5xl"></i>
-                                </div>
+                                <img th:src="${post.resolvedThumbnailUrl}" class="w-full h-full object-cover" th:alt="${post.title}">
                                 <div class="absolute top-3 left-3 bg-white/90 backdrop-blur text-gray-900 text-xs font-bold px-2 py-1 rounded" th:text="${post.category != null ? post.category.categoryName : 'Uncategorized'}">Category</div>
                                 <div class="absolute top-3 right-3 bg-success text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
                                     <i class="ph-bold ph-shield-check"></i> Trung gian
                                 </div>
                             </div>
                             <div class="p-4">
-                                <h3 class="font-bold text-gray-900 text-sm line-clamp-2 mb-2 min-h-[2.5rem]" th:text="${post.title}">Title</h3>
+                                <a th:href="@{/marketplace/{postId}(postId=${post.postId})}" class="block">
+                                    <h3 class="font-bold text-gray-900 text-sm line-clamp-2 mb-2 min-h-[2.5rem] hover:text-primary" th:text="${post.title}">Title</h3>
+                                </a>
                                 <div class="flex items-center gap-2 mb-3 text-xs text-gray-500">
                                     <div class="w-5 h-5 bg-primary/10 rounded-full flex items-center justify-center">
-                                        <i class="ph-fill ph-storefront text-primary text-xs"></i>
+                                        <i class="ph-fill ph-user text-primary text-xs"></i>
                                     </div>
-                                    <span>Shop uy tín</span>
+                                    <span th:text="${post.seller != null ? post.seller.username : 'TrustBridge Seller'}">Seller Name</span>
                                     <span class="text-gray-300">•</span>
                                     <span class="text-success"><i class="ph-fill ph-star"></i> 5.0</span>
                                 </div>
@@ -326,13 +353,17 @@
                                         <p class="text-xl font-bold text-primary" th:text="${#numbers.formatDecimal(post.price, 0, 'COMMA', 0, 'POINT') + ' ₫'}">Price</p>
                                     </div>
                                     <div class="flex gap-2">
+                                        <a th:href="@{/marketplace/{postId}(postId=${post.postId})}"
+                                            class="bg-white border border-gray-200 text-gray-700 text-sm font-semibold px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors">
+                                            Xem
+                                        </a>
                                         <!-- Add to Cart Button -->
-                                        <button th:onclick="'addToCart(' + ${post.postId} + ')'"
+                                        <button th:if="${canPurchase}" th:onclick="'addToCart(' + ${post.postId} + ')'"
                                             class="bg-gray-100 text-gray-700 text-sm font-semibold px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-1">
                                             <i class="ph-fill ph-shopping-cart"></i>
                                         </button>
                                         <!-- Buy Now Button -->
-                                        <button th:onclick="'buyNow(' + ${post.postId} + ')'"
+                                        <button th:if="${canPurchase}" th:onclick="'buyNow(' + ${post.postId} + ')'"
                                             class="bg-primary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors">
                                             Mua ngay
                                         </button>
@@ -354,20 +385,20 @@
                 <!-- Pagination -->
                 <div th:if="${totalPages > 1}" class="mt-8 flex justify-center">
                     <nav class="flex items-center gap-1">
-                        <a th:href="@{/marketplace(categoryId=${categoryId}, q=${keyword}, sort=${sort}, page=${currentPage - 1})}"
+                        <a th:href="@{/marketplace(categoryId=${categoryId}, q=${keyword}, minPrice=${minPriceValue > 0 ? minPriceValue : null}, maxPrice=${maxPriceValue < 10000000 ? maxPriceValue : null}, sort=${sort}, size=${pageSize}, page=${currentPage - 1})}"
                             th:class="${currentPage == 0 ? 'pointer-events-none opacity-50' : ''}"
                             class="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
                             <i class="ph ph-caret-left"></i>
                         </a>
                         <th:block th:each="i : ${#numbers.sequence(0, totalPages - 1)}">
                             <th:block th:if="${i >= currentPage - 2 and i <= currentPage + 2}">
-                                <a th:href="@{/marketplace(categoryId=${categoryId}, q=${keyword}, sort=${sort}, page=${i})}"
+                                <a th:href="@{/marketplace(categoryId=${categoryId}, q=${keyword}, minPrice=${minPriceValue > 0 ? minPriceValue : null}, maxPrice=${maxPriceValue < 10000000 ? maxPriceValue : null}, sort=${sort}, size=${pageSize}, page=${i})}"
                                     th:class="${i == currentPage ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'}"
                                     class="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 font-medium"
                                     th:text="${i + 1}">1</a>
                             </th:block>
                         </th:block>
-                        <a th:href="@{/marketplace(categoryId=${categoryId}, q=${keyword}, sort=${sort}, page=${currentPage + 1})}"
+                        <a th:href="@{/marketplace(categoryId=${categoryId}, q=${keyword}, minPrice=${minPriceValue > 0 ? minPriceValue : null}, maxPrice=${maxPriceValue < 10000000 ? maxPriceValue : null}, sort=${sort}, size=${pageSize}, page=${currentPage + 1})}"
                             th:class="${currentPage >= totalPages - 1 ? 'pointer-events-none opacity-50' : ''}"
                             class="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
                             <i class="ph ph-caret-right"></i>
@@ -377,6 +408,7 @@
             </div>
         </div>
     </div>
+    </main>
 
     <!-- Toast Notification -->
     <div id="toast" class="fixed bottom-4 right-4 bg-success text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 transform translate-y-20 opacity-0 transition-all duration-300 z-50">
@@ -385,7 +417,7 @@
     </div>
 
     <!-- Footer -->
-    <footer class="bg-gray-900 text-white pt-12 pb-6 mt-12">
+    <footer class="bg-gray-900 text-white pt-12 pb-6 mt-auto">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="text-center">
                 <p class="text-gray-400 text-sm">&copy; 2026 TrustBridge Market</p>
@@ -396,14 +428,26 @@
     <script th:inline="javascript">
         // Authentication status from server
         var isAuthenticated = /*[[${isAuthenticated}]]*/ false;
+        var isBuyer = /*[[${isBuyer}]]*/ false;
+        var canPurchase = /*[[${canPurchase}]]*/ false;
+        var currentPageSize = /*[[${pageSize}]]*/ 12;
 
         // Set current sort value on page load
         var currentSort = /*[[${sort}]]*/ 'newest';
         document.getElementById('sortSelect').value = currentSort;
+        document.getElementById('pageSizeSelect').value = String(currentPageSize);
 
         function sortProducts(sortValue) {
             var url = new URL(window.location.href);
             url.searchParams.set('sort', sortValue);
+            url.searchParams.set('page', '0');
+            window.location.href = url.toString();
+        }
+
+        function changePageSize(sizeValue) {
+            var url = new URL(window.location.href);
+            url.searchParams.set('size', sizeValue);
+            url.searchParams.set('page', '0');
             window.location.href = url.toString();
         }
 
@@ -473,6 +517,8 @@
                 url.searchParams.delete('maxPrice');
             }
 
+            url.searchParams.set('page', '0');
+
             window.location.href = url.toString();
         }
 
@@ -503,7 +549,7 @@
                             data.forEach(item => {
                                 const price = new Intl.NumberFormat('vi-VN').format(item.price) + ' ₫';
                                 html += `
-                                    <a href="/post/${item.id}" class="search-suggestion-item">
+                                    <a href="/marketplace/${item.id}" class="search-suggestion-item">
                                         ${item.thumbnailUrl ? `<img src="${item.thumbnailUrl}" alt="">` :
                                             '<div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center"><i class="ph-fill ph-package text-blue-400 text-xl"></i></div>'}
                                         <div class="flex-1 min-w-0">
@@ -540,6 +586,11 @@
 
         // ========== Buy Now & Add to Cart ==========
         function buyNow(postId) {
+            if (!canPurchase) {
+                showToast('Tài khoản seller không thể mua sản phẩm.', 'error');
+                return;
+            }
+
             if (!isAuthenticated) {
                 window.location.href = '/login.html?redirect=/marketplace';
                 return;
@@ -548,7 +599,44 @@
             window.location.href = '/buyer/checkout?postId=' + postId;
         }
 
+        function refreshCartCount() {
+            // Only call cart API for buyers (not sellers)
+            if (!isAuthenticated || !isBuyer) {
+                return;
+            }
+
+            fetch('/api/cart/count')
+            .then(async response => {
+                if (!response.ok) {
+                    return null;
+                }
+                return response.json();
+            })
+            .then(payload => {
+                if (!payload) {
+                    return;
+                }
+
+                const badge = document.getElementById('cartCountBadge');
+                if (!badge) {
+                    return;
+                }
+
+                const count = Number(payload.count || 0);
+                badge.textContent = count;
+                badge.classList.toggle('hidden', count <= 0);
+            })
+            .catch(err => {
+                console.error('Cart count error:', err);
+            });
+        }
+
         function addToCart(postId) {
+            if (!canPurchase) {
+                showToast('Tài khoản seller không thể thêm sản phẩm vào giỏ hàng.', 'error');
+                return;
+            }
+
             if (!isAuthenticated) {
                 window.location.href = '/login.html?redirect=/marketplace';
                 return;
@@ -564,6 +652,7 @@
             .then(response => {
                 if (response.ok) {
                     showToast('Đã thêm vào giỏ hàng!');
+                    refreshCartCount();
                 } else if (response.status === 401) {
                     window.location.href = '/login.html?redirect=/marketplace';
                 } else {
@@ -613,6 +702,8 @@
                 userDropdown.classList.add('hidden');
             });
         }
+
+        refreshCartCount();
     </script>
 </body>
 

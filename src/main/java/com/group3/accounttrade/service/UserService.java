@@ -71,7 +71,14 @@ public class UserService {
     }
 
     public boolean isEmailTaken(String email) {
-        return userRepository.existsByEmail(email);
+        if (email == null) {
+            return false;
+        }
+        String normalizedEmail = email.trim();
+        if (normalizedEmail.isEmpty()) {
+            return false;
+        }
+        return userRepository.existsByEmailIgnoreCase(normalizedEmail);
     }
 
     public void sendPasswordResetOtp(String email) throws Exception {

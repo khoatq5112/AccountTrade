@@ -2,10 +2,13 @@ package com.group3.accounttrade.controller;
 
 import com.group3.accounttrade.config.CustomAuthenticationFailureHandler;
 import com.group3.accounttrade.entity.Category;
-import com.group3.accounttrade.entity.Post;
+import com.group3.accounttrade.entity.User;
+import com.group3.accounttrade.repository.UserRepository;
 import com.group3.accounttrade.service.CategoryService;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,24 +20,19 @@ import java.util.List;
 public class HomeController {
 
     private final CategoryService categoryService;
+    private final UserRepository userRepository;
 
     @GetMapping("/")
     public String viewHomePage(Model model) {
-        // Load parent categories with subcategories
-        List<Category> parentCategories = categoryService.getAllParentCategories();
-        model.addAttribute("parentCategories", parentCategories);
+        // Load all categories
+        List<Category> categories = categoryService.getAllCategories();
+        model.addAttribute("categories", categories);
 
         // Load posts by category for homepage sections
-        model.addAttribute("googleDrivePosts", categoryService.getPostsByCategoryName("Google Drive", 4));
-        model.addAttribute("vpnPosts", categoryService.getPostsByCategoryName("VPN, Bảo mật mạng", 4));
-        model.addAttribute("aiPosts", categoryService.getPostsByCategoryName("Thế giới AI", 4));
-        model.addAttribute("giftCardPosts", categoryService.getPostsByCategoryName("Gift Card", 4));
-        model.addAttribute("designPosts", categoryService.getPostsByCategoryName("Edit Ảnh - Video", 4));
-        model.addAttribute("microsoftPosts", categoryService.getPostsByCategoryName("Windows, Office", 4));
-        model.addAttribute("steamPosts", categoryService.getPostsByCategoryName("Steam Wallet", 4));
         model.addAttribute("entertainmentPosts", categoryService.getPostsByCategoryName("Giải trí", 4));
-        model.addAttribute("workPosts", categoryService.getPostsByCategoryName("Làm việc", 4));
-        model.addAttribute("learningPosts", categoryService.getPostsByCategoryName("Học tập", 4));
+        model.addAttribute("musicPosts", categoryService.getPostsByCategoryName("Nghe Nhạc", 4));
+        model.addAttribute("moviePosts", categoryService.getPostsByCategoryName("Xem Phim", 4));
+        attachAuthState(model);
 
         return "index";
     }
@@ -57,5 +55,23 @@ public class HomeController {
     @GetMapping({"/register", "/register.html"})
     public String viewRegisterPageHtml() {
         return "register";
+    }
+
+    private void attachAuthState(Model model) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAuthenticated = auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal());
+        model.addAttribute("isAuthenticated", isAuthenticated);
+
+        if (!isAuthenticated) {
+            return;
+        }
+
+        User currentUser = userRepository.findByUsername(auth.getName())
+                .orElseGet(() -> userRepository.findByEmailIgnoreCase(auth.getName()).orElse(null));
+
+        if (currentUser != null) {
+            model.addAttribute("currentUsername", currentUser.getUsername());
+            model.addAttribute("currentRole", currentUser.getRole() != null ? currentUser.getRole().getRoleName() : "");
+        }
     }
 }

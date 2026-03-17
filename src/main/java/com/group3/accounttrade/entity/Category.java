@@ -3,8 +3,10 @@ package com.group3.accounttrade.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.util.List;
-
+/**
+ * Entity representing a single-level product category.
+ * Parent-child hierarchy has been removed for simplicity.
+ */
 @Data
 @Entity
 @Table(name = "Categories")
@@ -23,13 +25,6 @@ public class Category {
 
     @Column(name = "category_icon")
     private String categoryIcon;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_id")
-    private Category parent;
-
-    @OneToMany(mappedBy = "parent")
-    private List<Category> subcategories;
 
     @Column(name = "display_order")
     private Integer displayOrder;

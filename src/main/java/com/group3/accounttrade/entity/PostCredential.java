@@ -2,6 +2,9 @@ package com.group3.accounttrade.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.time.LocalDateTime;
 
 @Data
 @Entity
@@ -16,9 +19,20 @@ public class PostCredential {
     @Column(name = "credential_id")
     private Integer credentialId;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "post_id", unique = true)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "post_id", nullable = false)
+    @ToString.Exclude
     private Post post;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "credential_status_id", nullable = false)
+    @ToString.Exclude
+    private CredentialStatus credentialStatus;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sold_to_order_id")
+    @ToString.Exclude
+    private Transaction soldToOrder;
 
     @Column(name = "account_username", nullable = false)
     private String accountUsername;
@@ -26,6 +40,31 @@ public class PostCredential {
     @Column(name = "account_password", nullable = false)
     private String accountPassword;
 
+    @Lob
     @Column(name = "security_notes", columnDefinition = "TEXT")
     private String securityNotes;
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @Transient
+    public boolean isAvailable() {
+        return credentialStatus != null && CredentialStatus.AVAILABLE.equals(credentialStatus.getStatusName());
+    }
+
+    @Transient
+    public boolean isSold() {
+        return credentialStatus != null && CredentialStatus.SOLD.equals(credentialStatus.getStatusName());
+    }
+
+    @Transient
+    public boolean isHolding() {
+        return credentialStatus != null && CredentialStatus.HOLDING.equals(credentialStatus.getStatusName());
+    }
+
+    @Transient
+    public boolean isHidden() {
+        return credentialStatus != null && CredentialStatus.HIDDEN.equals(credentialStatus.getStatusName());
+    }
 }

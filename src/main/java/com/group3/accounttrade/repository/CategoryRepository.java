@@ -10,10 +10,9 @@ import java.util.List;
 @Repository
 public interface CategoryRepository extends JpaRepository<Category, Integer> {
 
-    List<Category> findByParentIsNullOrderByDisplayOrderAsc();
-
-    List<Category> findByParentCategoryIdOrderByDisplayOrderAsc(Integer parentId);
-
-    @Query("SELECT c FROM Category c WHERE c.parent IS NULL ORDER BY c.displayOrder ASC")
-    List<Category> findAllParentCategories();
+    /**
+     * Find all categories ordered by display order.
+     */
+    @Query("SELECT c FROM Category c ORDER BY c.displayOrder ASC")
+    List<Category> findAllOrderByDisplayOrderAsc();
 }

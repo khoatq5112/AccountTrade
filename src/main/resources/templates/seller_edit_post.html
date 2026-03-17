@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrustBridge Market | Chỉnh sửa bài đăng</title>
+    <!-- Google Fonts: Manrope -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#137fec',
+                        surface: '#f5f7fa',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        error: '#ef4444'
+                    },
+                    fontFamily: {
+                        sans: ['Manrope', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px rgba(0, 0, 0, 0.05)',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Quill.js CSS for rich text editor -->
+    <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+    <style type="text/tailwindcss">
+        body { background-color: #f5f7fa; color: #1a1a1a; }
+        .btn-primary { @apply bg-primary text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-blue-600; }
+        .btn-outline { @apply border border-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-gray-50; }
+        .btn-danger { @apply bg-error text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-red-600; }
+        .card { @apply bg-white rounded-xl shadow-soft border border-gray-100 p-6; }
+        .form-input { @apply w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all; }
+        .form-label { @apply block text-sm font-bold text-gray-700 mb-2; }
+        .form-error { @apply text-error text-sm mt-1; }
+    </style>
+    <style>
+        /* Quill editor custom styling */
+        .ql-container {
+            min-height: 250px;
+            font-family: 'Manrope', sans-serif;
+            font-size: 15px;
+        }
+        .ql-editor {
+            min-height: 250px;
+            line-height: 1.6;
+        }
+        .ql-toolbar.ql-snow {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem 0.5rem 0 0;
+        }
+        .ql-container.ql-snow {
+            border: 1px solid #e5e7eb;
+            border-top: none;
+            border-radius: 0 0 0.5rem 0.5rem;
+        }
+        .ql-toolbar.ql-snow .ql-picker-label:hover,
+        .ql-toolbar.ql-snow .ql-picker-label.ql-active {
+            color: #137fec;
+        }
+        .ql-snow .ql-stroke {
+            stroke: #6b7280;
+        }
+        .ql-snow .ql-fill {
+            fill: #6b7280;
+        }
+        .ql-toolbar.ql-snow button:hover .ql-stroke,
+        .ql-toolbar.ql-snow button.ql-active .ql-stroke {
+            stroke: #137fec;
+        }
+        .ql-toolbar.ql-snow button:hover .ql-fill,
+        .ql-toolbar.ql-snow button.ql-active .ql-fill {
+            fill: #137fec;
+        }
+    </style>
+</head>
+
+<body class="font-sans antialiased">
+    <!-- Navigation -->
+    <nav class="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-20 items-center">
+                <div class="flex items-center">
+                    <a th:href="@{/}" class="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                        <i class="ph-fill ph-shield-check text-primary text-3xl"></i>
+                        <span class="font-bold text-2xl tracking-tight text-gray-900">TrustBridge</span>
+                    </a>
+                    <div class="hidden md:flex ml-10 space-x-8">
+                        <a th:href="@{/marketplace}"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Chợ trung gian</a>
+                        <a th:href="@{/seller/dashboard}"
+                            class="text-primary font-bold px-3 py-2 transition-colors border-b-2 border-primary">Dashboard Kênh Bán</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <div class="relative" id="userMenuWrapper">
+                        <button id="userMenuBtn" onclick="toggleUserMenu()"
+                            class="flex items-center gap-3 cursor-pointer group focus:outline-none">
+                            <div
+                                class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold shadow-soft group-hover:scale-105 transition-transform">
+                                <span sec:authentication="principal.username">User</span>
+                            </div>
+                            <i class="ph ph-caret-down text-gray-400 text-sm"></i>
+                        </button>
+                        <!-- Dropdown -->
+                        <div id="userMenu"
+                            class="hidden absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
+                            <a th:href="@{/seller/dashboard}"
+                                class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-bold">
+                                <i class="ph ph-squares-four"></i> Dashboard
+                            </a>
+                            <div class="border-t border-gray-100 my-1"></div>
+                            <form th:action="@{/logout}" method="POST">
+                                <button type="submit"
+                                    class="w-full flex items-center gap-2 px-4 py-2 text-sm text-error hover:bg-red-50 font-bold text-left">
+                                    <i class="ph ph-sign-out"></i> Đăng xuất
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Page Header -->
+        <div class="mb-8">
+            <nav class="flex items-center gap-2 text-sm text-gray-500 mb-4">
+                <a th:href="@{/seller/dashboard}" class="hover:text-primary transition-colors">Dashboard</a>
+                <i class="ph ph-caret-right text-xs"></i>
+                <a th:href="@{/seller/posts}" class="hover:text-primary transition-colors">Quản lý bài đăng</a>
+                <i class="ph ph-caret-right text-xs"></i>
+                <span class="text-gray-900 font-bold">Chỉnh sửa</span>
+            </nav>
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">Chỉnh sửa bài đăng</h1>
+                    <p class="text-gray-500 mt-2">Cập nhật thông tin bài đăng #<span th:text="${post.postId}">1</span></p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a th:href="@{/marketplace/{id}(id=${post.postId})}" target="_blank"
+                       class="btn-outline flex items-center gap-2">
+                        <i class="ph ph-eye"></i> Xem bài đăng
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Message -->
+        <div th:if="${errorMessage}" class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
+            <i class="ph-fill ph-warning-circle text-error text-2xl"></i>
+            <span th:text="${errorMessage}" class="text-red-700 font-bold"></span>
+        </div>
+
+        <!-- Current Stock Status Info -->
+        <div class="card bg-blue-50 border-blue-200 mb-6">
+            <div class="flex items-center gap-3">
+                <i class="ph ph-info text-primary text-2xl"></i>
+                <div>
+                    <p class="font-bold text-gray-900">Trạng thái kho hiện tại</p>
+                    <p class="text-gray-600">
+                        Trạng thái: 
+                        <span th:switch="${post.stockStatus != null ? post.stockStatus.name() : 'OUT_OF_STOCK'}">
+                            <span th:case="'IN_STOCK'" class="font-bold text-green-600">Còn hàng</span>
+                            <span th:case="'OUT_OF_STOCK'" class="font-bold text-red-600">Hết hàng</span>
+                            <span th:case="*" class="font-bold text-gray-600">Chưa xác định</span>
+                        </span>
+                        <span class="mx-2">|</span>
+                        Đăng lúc: <span th:text="${#temporals.format(post.createdAt, 'dd/MM/yyyy HH:mm')}">01/01/2026</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit Post Form -->
+        <form th:action="@{/seller/posts/{id}(id=${post.postId})}" th:object="${postForm}" method="POST" enctype="multipart/form-data"
+              class="space-y-6">
+            
+            <!-- Title -->
+            <div class="card">
+                <label for="title" class="form-label">
+                    <i class="ph ph-text-t text-primary mr-1"></i>
+                    Tiêu đề <span class="text-error">*</span>
+                </label>
+                <input type="text" id="title" th:field="*{title}" 
+                       class="form-input" placeholder="VD: Tài khoản Netflix Premium 1 năm"
+                       th:classappend="${#fields.hasErrors('title')} ? 'border-error ring-error' : ''">
+                <p th:if="${#fields.hasErrors('title')}" th:errors="*{title}" class="form-error"></p>
+            </div>
+
+            <!-- Price -->
+            <div class="card">
+                <label for="price" class="form-label">
+                    <i class="ph ph-currency-dollar text-primary mr-1"></i>
+                    Giá bán (VNĐ) <span class="text-error">*</span>
+                </label>
+                <input type="number" id="price" th:field="*{price}" step="0.01" min="0"
+                       class="form-input" placeholder="VD: 150000"
+                       th:classappend="${#fields.hasErrors('price')} ? 'border-error ring-error' : ''">
+                <p th:if="${#fields.hasErrors('price')}" th:errors="*{price}" class="form-error"></p>
+            </div>
+
+            <!-- Description with Quill Editor -->
+            <div class="card">
+                <label class="form-label">
+                    <i class="ph ph-text-align-left text-primary mr-1"></i>
+                    Mô tả chi tiết
+                </label>
+                <div id="editor-container"></div>
+                <input type="hidden" name="description" id="description" th:value="*{description}">
+            </div>
+
+            <!-- Current Thumbnail Preview -->
+            <div class="card">
+                <label class="form-label">
+                    <i class="ph ph-image text-primary mr-1"></i>
+                    Hình ảnh đại diện
+                </label>
+                
+                <!-- Current Image -->
+                <div th:if="${post.thumbnailUrl != null and !post.thumbnailUrl.isEmpty()}" class="mb-4">
+                    <p class="text-sm text-gray-500 mb-2">Hình ảnh hiện tại:</p>
+                    <img th:src="${post.thumbnailUrl}" alt="Current thumbnail" class="max-h-48 rounded-lg shadow-md border border-gray-200">
+                </div>
+                <div th:if="${post.thumbnailUrl == null or post.thumbnailUrl.isEmpty()}" class="mb-4">
+                    <p class="text-sm text-gray-500 mb-2">Đang sử dụng hình ảnh mặc định</p>
+                    <img th:src="${post.resolvedThumbnailUrl}" alt="Default thumbnail" class="max-h-48 rounded-lg shadow-md border border-gray-200">
+                </div>
+
+                <!-- New Image Upload -->
+                <label for="thumbnailFile" class="form-label text-sm">
+                    <i class="ph ph-upload-simple text-primary mr-1"></i>
+                    Tải lên hình ảnh mới (để trống nếu muốn giữ nguyên)
+                </label>
+                <div class="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-primary transition-colors cursor-pointer"
+                     id="dropZone">
+                    <input type="file" id="thumbnailFile" th:field="*{thumbnailFile}" 
+                           accept="image/*" class="hidden">
+                    <div id="uploadPlaceholder">
+                        <i class="ph ph-cloud-arrow-up text-4xl text-gray-300 mb-2"></i>
+                        <p class="text-gray-500 font-bold">Kéo thả hình ảnh vào đây</p>
+                        <p class="text-gray-400 text-sm mt-1">hoặc click để chọn file</p>
+                    </div>
+                    <div id="previewContainer" class="hidden">
+                        <img id="imagePreview" class="max-h-32 mx-auto rounded-lg shadow-md">
+                        <p id="fileName" class="text-gray-600 text-sm mt-2"></p>
+                        <button type="button" onclick="clearImage()" 
+                                class="mt-2 text-error text-sm font-bold hover:underline">
+                            <i class="ph ph-trash"></i> Xóa hình ảnh mới
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category Selection -->
+            <div class="card">
+                <label for="categoryId" class="form-label">
+                    <i class="ph ph-folder text-primary mr-1"></i>
+                    Danh mục <span class="text-error">*</span>
+                </label>
+                <select id="categoryId" th:field="*{categoryId}" 
+                        class="form-input cursor-pointer"
+                        th:classappend="${#fields.hasErrors('categoryId')} ? 'border-error ring-error' : ''">
+                    <option value="">-- Chọn danh mục --</option>
+                    <option th:each="cat : ${categories}" 
+                            th:value="${cat.categoryId}" 
+                            th:text="${cat.categoryName}"></option>
+                </select>
+                <p th:if="${#fields.hasErrors('categoryId')}" th:errors="*{categoryId}" class="form-error"></p>
+            </div>
+
+            <!-- Stock/Credential Management Section - Stock = Available Credentials -->
+            <div class="card border-2 border-primary/30 bg-blue-50/30">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <i class="ph ph-package text-primary text-xl"></i>
+                        <h3 class="font-bold text-gray-900">Kho hàng & Tài khoản</h3>
+                    </div>
+                    <a th:href="@{/seller/posts/{id}/credentials(id=${post.postId})}"
+                       class="btn-primary flex items-center gap-2">
+                        <i class="ph ph-gear"></i> Quản lý tài khoản
+                    </a>
+                </div>
+                
+                <!-- Stock = Credentials Explanation -->
+                <div class="bg-white rounded-lg p-4 mb-4 border border-blue-200">
+                    <div class="flex items-start gap-3">
+                        <i class="ph ph-info text-primary text-xl mt-0.5"></i>
+                        <div>
+                            <p class="text-sm text-gray-700 font-medium">Số lượng kho hàng = Số tài khoản có sẵn</p>
+                            <p class="text-xs text-gray-500 mt-1">
+                                Mỗi tài khoản trong kho là một sản phẩm có thể bán. Khi có người mua, một tài khoản sẽ được gán cho họ.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Credential Statistics - This IS the stock -->
+                <div th:if="${credentialStats != null}" class="grid grid-cols-3 gap-4 mb-4">
+                    <div class="text-center p-4 bg-white rounded-lg border border-gray-200">
+                        <div class="text-3xl font-bold text-gray-900" th:text="${credentialStats.total}">0</div>
+                        <div class="text-xs text-gray-500 mt-1">Tổng số tài khoản</div>
+                    </div>
+                    <div class="text-center p-4 bg-green-50 rounded-lg border border-green-200">
+                        <div class="text-3xl font-bold text-success" th:text="${credentialStats.available}">0</div>
+                        <div class="text-xs text-gray-500 mt-1">Có sẵn (Kho hàng)</div>
+                    </div>
+                    <div class="text-center p-4 bg-red-50 rounded-lg border border-red-200">
+                        <div class="text-3xl font-bold text-error" th:text="${credentialStats.sold}">0</div>
+                        <div class="text-xs text-gray-500 mt-1">Đã bán</div>
+                    </div>
+                </div>
+                
+                <!-- Stock Status Badge -->
+                <div class="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200">
+                    <div class="flex items-center gap-3">
+                        <span class="text-sm font-medium text-gray-700">Trạng thái kho:</span>
+                        <span th:if="${post.stockStatus != null and post.stockStatus.name() == 'IN_STOCK'}"
+                              class="inline-flex items-center px-4 py-2 text-sm font-bold rounded-full bg-green-100 text-green-700">
+                            <i class="ph ph-check-circle mr-2"></i> Còn hàng (<span th:text="${credentialStats != null ? credentialStats.available : 0}">0</span> tài khoản)
+                        </span>
+                        <span th:if="${post.stockStatus != null and post.stockStatus.name() == 'OUT_OF_STOCK'}"
+                              class="inline-flex items-center px-4 py-2 text-sm font-bold rounded-full bg-red-100 text-red-700">
+                            <i class="ph ph-warning-circle mr-2"></i> Hết hàng
+                        </span>
+                        <span th:if="${post.stockStatus == null}"
+                              class="inline-flex items-center px-4 py-2 text-sm font-bold rounded-full bg-gray-100 text-gray-700">
+                            <i class="ph ph-question mr-2"></i> Chưa xác định
+                        </span>
+                    </div>
+                    <a th:href="@{/seller/posts/{id}/credentials(id=${post.postId})}"
+                       class="text-primary hover:underline text-sm font-medium">
+                        <i class="ph ph-plus-circle mr-1"></i> Thêm tài khoản
+                    </a>
+                </div>
+                
+                <div class="mt-4 pt-4 border-t border-gray-200">
+                    <p class="text-sm text-gray-500">
+                        <i class="ph ph-lightbulb text-warning mr-1"></i>
+                        <strong>Lưu ý:</strong> Để tăng kho hàng, hãy thêm tài khoản mới qua trang "Quản lý tài khoản".
+                        Mỗi người mua sẽ nhận một tài khoản duy nhất.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Submit Buttons -->
+            <div class="card bg-gray-50">
+                <div class="flex flex-col sm:flex-row gap-4 justify-between">
+                    <div class="flex gap-2">
+                        <a th:href="@{/seller/posts}" class="btn-outline">
+                            <i class="ph ph-arrow-left mr-2"></i> Quay lại
+                        </a>
+                        <form th:action="@{/seller/posts/{id}/delete(id=${post.postId})}" method="POST"
+                              class="inline" onsubmit="return confirm('Bạn có chắc muốn xóa bài đăng này? Hành động này không thể hoàn tác.');">
+                            <button type="submit" class="btn-danger">
+                                <i class="ph ph-trash mr-2"></i> Xóa bài đăng
+                            </button>
+                        </form>
+                    </div>
+                    <button type="submit" class="btn-primary px-8 py-3">
+                        <i class="ph ph-check-circle mr-2"></i> Lưu thay đổi
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center text-sm text-gray-500 border-t border-gray-800 pt-8">
+            <div class="flex items-center gap-2 mb-4 md:mb-0">
+                <i class="ph-fill ph-shield-check text-primary text-2xl"></i>
+                <span class="font-bold text-lg tracking-tight text-gray-300">TrustBridge Market</span>
+            </div>
+            <p>&copy; 2026 TrustBridge Market. Bảo vệ qua hệ thống giao dịch trung gian.</p>
+        </div>
+    </footer>
+
+    <!-- Quill.js -->
+    <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+    <script>
+        // Initialize Quill editor
+        var quill = new Quill('#editor-container', {
+            theme: 'snow',
+            modules: {
+                toolbar: [
+                    [{ 'header': [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'color': [] }, { 'background': [] }],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    ['link', 'image'],
+                    ['clean']
+                ]
+            },
+            placeholder: 'Nhập mô tả chi tiết về sản phẩm của bạn...'
+        });
+
+        // Set initial content from existing post
+        var existingDescription = document.getElementById('description').value;
+        if (existingDescription) {
+            quill.root.innerHTML = existingDescription;
+        }
+
+        // Sync Quill content to hidden input before form submit
+        document.querySelector('form').addEventListener('submit', function() {
+            document.getElementById('description').value = quill.root.innerHTML;
+        });
+
+        // User menu toggle
+        function toggleUserMenu() {
+            document.getElementById('userMenu').classList.toggle('hidden');
+        }
+
+        document.addEventListener('click', function(e) {
+            const wrapper = document.getElementById('userMenuWrapper');
+            if (wrapper && !wrapper.contains(e.target)) {
+                document.getElementById('userMenu').classList.add('hidden');
+            }
+        });
+
+        // Image upload handling
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('thumbnailFile');
+        const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+        const previewContainer = document.getElementById('previewContainer');
+        const imagePreview = document.getElementById('imagePreview');
+        const fileName = document.getElementById('fileName');
+
+        // Click to select file
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        // Drag and drop handling
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-primary', 'bg-blue-50');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-primary', 'bg-blue-50');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-primary', 'bg-blue-50');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                handleFileSelect(files[0]);
+            }
+        });
+
+        // File input change
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        function handleFileSelect(file) {
+            if (!file.type.startsWith('image/')) {
+                alert('Vui lòng chọn file hình ảnh.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+                fileName.textContent = file.name;
+                uploadPlaceholder.classList.add('hidden');
+                previewContainer.classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearImage() {
+            fileInput.value = '';
+            imagePreview.src = '';
+            fileName.textContent = '';
+            uploadPlaceholder.classList.remove('hidden');
+            previewContainer.classList.add('hidden');
+        }
+    </script>
+</body>
+
+</html>

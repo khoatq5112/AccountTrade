@@ -7,6 +7,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @Entity
@@ -42,9 +44,16 @@ public class Post {
     @JoinColumn(name = "category_id")
     private Category category;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "status_id")
-    private PostStatus status;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "stock_status", length = 20)
+    @Builder.Default
+    private StockStatus stockStatus = StockStatus.OUT_OF_STOCK;
+
+    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private List<PostCredential> credentials = new ArrayList<>();
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
@@ -53,4 +62,40 @@ public class Post {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Transient
+    public String getResolvedThumbnailUrl() {
+        if (thumbnailUrl != null && !thumbnailUrl.isBlank()) {
+            return thumbnailUrl;
+        }
+        // Return static placeholder image
+        return "/images/placeholder-product.svg";
+    }
+
+    @Transient
+    public boolean isInStock() {
+        return stockStatus == StockStatus.IN_STOCK;
+    }
+
+    @Transient
+    public long getAvailableCredentialCount() {
+        if (credentials == null) return 0;
+        return credentials.stream()
+                .filter(PostCredential::isAvailable)
+                .count();
+    }
+
+    @Transient
+    public long getSoldCredentialCount() {
+        if (credentials == null) return 0;
+        return credentials.stream()
+                .filter(PostCredential::isSold)
+                .count();
+    }
+
+    @Transient
+    public long getTotalCredentialCount() {
+        if (credentials == null) return 0;
+        return credentials.size();
+    }
 }

@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Controller
@@ -50,9 +50,22 @@ public class AuthController {
 
     @GetMapping("/api/auth/check-email")
     @ResponseBody
-    public ResponseEntity<Map<String, Boolean>> checkEmail(@RequestParam String email) {
-        boolean exists = userService.isEmailTaken(email);
-        return ResponseEntity.ok(Collections.singletonMap("exists", exists));
+    public ResponseEntity<Map<String, Object>> checkEmail(@RequestParam String email) {
+        String normalizedEmail = email == null ? "" : email.trim();
+        Map<String, Object> payload = new LinkedHashMap<>();
+
+        if (normalizedEmail.isEmpty()) {
+            payload.put("exists", false);
+            payload.put("valid", false);
+            payload.put("message", "Email is required");
+            return ResponseEntity.badRequest().body(payload);
+        }
+
+        boolean exists = userService.isEmailTaken(normalizedEmail);
+        payload.put("exists", exists);
+        payload.put("valid", true);
+        payload.put("message", exists ? "Email already exists" : "Email is available");
+        return ResponseEntity.ok(payload);
     }
 
     @GetMapping("/verify-otp")

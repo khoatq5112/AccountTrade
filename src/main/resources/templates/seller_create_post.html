@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrustBridge Market | Đăng bán sản phẩm</title>
+    <!-- Google Fonts: Manrope -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#137fec',
+                        surface: '#f5f7fa',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        error: '#ef4444'
+                    },
+                    fontFamily: {
+                        sans: ['Manrope', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px rgba(0, 0, 0, 0.05)',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Quill.js CSS for rich text editor -->
+    <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+    <style type="text/tailwindcss">
+        body { background-color: #f5f7fa; color: #1a1a1a; }
+        .btn-primary { @apply bg-primary text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-blue-600; }
+        .btn-outline { @apply border border-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-gray-50; }
+        .btn-danger { @apply bg-error text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-red-600; }
+        .card { @apply bg-white rounded-xl shadow-soft border border-gray-100 p-6; }
+        .form-input { @apply w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all; }
+        .form-label { @apply block text-sm font-bold text-gray-700 mb-2; }
+        .form-error { @apply text-error text-sm mt-1; }
+    </style>
+    <style>
+        /* Quill editor custom styling */
+        .ql-container {
+            min-height: 250px;
+            font-family: 'Manrope', sans-serif;
+            font-size: 15px;
+        }
+        .ql-editor {
+            min-height: 250px;
+            line-height: 1.6;
+        }
+        .ql-toolbar.ql-snow {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem 0.5rem 0 0;
+        }
+        .ql-container.ql-snow {
+            border: 1px solid #e5e7eb;
+            border-top: none;
+            border-radius: 0 0 0.5rem 0.5rem;
+        }
+        .ql-toolbar.ql-snow .ql-picker-label:hover,
+        .ql-toolbar.ql-snow .ql-picker-label.ql-active {
+            color: #137fec;
+        }
+        .ql-snow .ql-stroke {
+            stroke: #6b7280;
+        }
+        .ql-snow .ql-fill {
+            fill: #6b7280;
+        }
+        .ql-toolbar.ql-snow button:hover .ql-stroke,
+        .ql-toolbar.ql-snow button.ql-active .ql-stroke {
+            stroke: #137fec;
+        }
+        .ql-toolbar.ql-snow button:hover .ql-fill,
+        .ql-toolbar.ql-snow button.ql-active .ql-fill {
+            fill: #137fec;
+        }
+        .credential-row {
+            transition: all 0.3s ease;
+        }
+        .credential-row:hover {
+            background-color: #f9fafb;
+        }
+    </style>
+</head>
+
+<body class="font-sans antialiased">
+    <!-- Navigation -->
+    <nav class="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-20 items-center">
+                <div class="flex items-center">
+                    <a th:href="@{/}" class="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                        <i class="ph-fill ph-shield-check text-primary text-3xl"></i>
+                        <span class="font-bold text-2xl tracking-tight text-gray-900">TrustBridge</span>
+                    </a>
+                    <div class="hidden md:flex ml-10 space-x-8">
+                        <a th:href="@{/marketplace}"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Chợ trung gian</a>
+                        <a th:href="@{/seller/dashboard}"
+                            class="text-primary font-bold px-3 py-2 transition-colors border-b-2 border-primary">Dashboard Kênh Bán</a>
+                        <a th:href="@{/support}"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Hỗ trợ</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <div class="relative" id="userMenuWrapper">
+                        <button id="userMenuBtn" onclick="toggleUserMenu()"
+                            class="flex items-center gap-3 cursor-pointer group focus:outline-none">
+                            <div
+                                class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold shadow-soft group-hover:scale-105 transition-transform">
+                                <span sec:authentication="principal.username">User</span>
+                            </div>
+                            <i class="ph ph-caret-down text-gray-400 text-sm"></i>
+                        </button>
+                        <!-- Dropdown -->
+                        <div id="userMenu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
+                            <a th:href="@{/seller/dashboard}" class="block px-4 py-2 text-gray-700 hover:bg-gray-50 font-medium">
+                                <i class="ph ph-user-circle mr-2"></i> Dashboard
+                            </a>
+                            <a th:href="@{/seller/posts}" class="block px-4 py-2 text-gray-700 hover:bg-gray-50 font-medium">
+                                <i class="ph ph-package mr-2"></i> Bài đăng của tôi
+                            </a>
+                            <div class="border-t border-gray-100 my-2"></div>
+                            <a th:href="@{/logout}" class="block px-4 py-2 text-error hover:bg-red-50 font-medium">
+                                <i class="ph ph-sign-out mr-2"></i> Đăng xuất
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Page Header -->
+        <div class="mb-8">
+            <div class="flex items-center gap-2 text-sm text-gray-500 mb-2">
+                <a th:href="@{/seller/posts}" class="hover:text-primary transition-colors">Bài đăng</a>
+                <i class="ph ph-caret-right text-xs"></i>
+                <span class="text-gray-900">Đăng bán sản phẩm mới</span>
+            </div>
+            <h1 class="text-3xl font-bold text-gray-900">Đăng bán sản phẩm</h1>
+            <p class="text-gray-600 mt-2">Tạo bài đăng mới để bán tài khoản sản phẩm của bạn.</p>
+        </div>
+
+        <!-- Success Message -->
+        <div th:if="${successMessage}" class="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3">
+            <i class="ph ph-check-circle text-success text-2xl"></i>
+            <span th:text="${successMessage}" class="text-green-700 font-medium"></span>
+        </div>
+
+        <!-- Error Message -->
+        <div th:if="${errorMessage}" class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
+            <i class="ph ph-warning-circle text-error text-2xl"></i>
+            <span th:text="${errorMessage}" class="text-red-700 font-medium"></span>
+        </div>
+
+        <!-- Create Post Form -->
+        <form th:action="@{/seller/posts}" th:object="${postForm}" method="POST" enctype="multipart/form-data"
+              class="space-y-6">
+            
+            <!-- Title -->
+            <div class="card">
+                <label for="title" class="form-label">
+                    <i class="ph ph-text-t text-primary mr-1"></i>
+                    Tiêu đề <span class="text-error">*</span>
+                </label>
+                <input type="text" id="title" th:field="*{title}" 
+                       class="form-input" placeholder="VD: Tài khoản Netflix Premium 1 năm"
+                       th:classappend="${#fields.hasErrors('title')} ? 'border-error ring-error' : ''">
+                <p th:if="${#fields.hasErrors('title')}" th:errors="*{title}" class="form-error"></p>
+            </div>
+
+            <!-- Price -->
+            <div class="card">
+                <label for="price" class="form-label">
+                    <i class="ph ph-currency-dollar text-primary mr-1"></i>
+                    Giá bán (VNĐ) <span class="text-error">*</span>
+                </label>
+                <input type="number" id="price" th:field="*{price}" step="1000" min="1000"
+                       class="form-input" placeholder="VD: 50000"
+                       th:classappend="${#fields.hasErrors('price')} ? 'border-error ring-error' : ''">
+                <p th:if="${#fields.hasErrors('price')}" th:errors="*{price}" class="form-error"></p>
+                <p class="text-gray-400 text-sm mt-2">Nhập giá bằng VNĐ. Giá tối thiểu 1,000đ.</p>
+            </div>
+
+            <!-- Category -->
+            <div class="card">
+                <label for="categoryId" class="form-label">
+                    <i class="ph ph-folder text-primary mr-1"></i>
+                    Danh mục <span class="text-error">*</span>
+                </label>
+                <select id="categoryId" th:field="*{categoryId}" 
+                        class="form-input cursor-pointer"
+                        th:classappend="${#fields.hasErrors('categoryId')} ? 'border-error ring-error' : ''">
+                    <option value="">-- Chọn danh mục --</option>
+                    <option th:each="cat : ${categories}" 
+                            th:value="${cat.categoryId}" 
+                            th:text="${cat.categoryName}"></option>
+                </select>
+                <p th:if="${#fields.hasErrors('categoryId')}" th:errors="*{categoryId}" class="form-error"></p>
+            </div>
+
+            <!-- Thumbnail -->
+            <div class="card">
+                <label class="form-label">
+                    <i class="ph ph-image text-primary mr-1"></i>
+                    Hình ảnh sản phẩm
+                </label>
+                <div id="dropZone" class="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-primary transition-colors">
+                    <div id="uploadPlaceholder">
+                        <i class="ph ph-cloud-arrow-up text-5xl text-gray-300 mb-4"></i>
+                        <p class="text-gray-600 font-medium">Kéo thả hình ảnh vào đây</p>
+                        <p class="text-gray-400 text-sm mt-1">hoặc click để chọn file</p>
+                    </div>
+                    <div id="previewContainer" class="hidden">
+                        <img id="imagePreview" src="" alt="Preview" class="max-h-48 mx-auto rounded-lg mb-3">
+                        <p id="fileName" class="text-gray-600 text-sm"></p>
+                        <button type="button" onclick="clearImage()" class="text-error text-sm mt-2 hover:underline">
+                            <i class="ph ph-trash mr-1"></i>Xóa ảnh
+                        </button>
+                    </div>
+                </div>
+                <input type="file" id="thumbnailFile" th:field="*{thumbnailFile}" accept="image/*" class="hidden">
+                <p class="text-gray-400 text-sm mt-2">Hỗ trợ: JPG, PNG, GIF. Tối đa 5MB.</p>
+            </div>
+
+            <!-- Description -->
+            <div class="card">
+                <label class="form-label">
+                    <i class="ph ph-text-align-left text-primary mr-1"></i>
+                    Mô tả chi tiết
+                </label>
+                <div id="editor-container"></div>
+                <input type="hidden" id="description" th:field="*{description}">
+                <p class="text-gray-400 text-sm mt-2">Mô tả chi tiết về sản phẩm, hướng dẫn sử dụng, lưu ý quan trọng.</p>
+            </div>
+
+            <!-- Credentials Section - This IS the stock/inventory -->
+            <div class="card border-2 border-primary/30 bg-blue-50/30">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <i class="ph ph-lock-key text-primary text-xl"></i>
+                        <h3 class="font-bold text-gray-900">Kho hàng (Tài khoản bán)</h3>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <!-- Stock Status Badge -->
+                        <span id="stockStatusBadge" class="inline-flex items-center px-3 py-1 text-sm font-bold rounded-full bg-red-100 text-red-700">
+                            <i class="ph ph-warning-circle mr-1"></i> Hết hàng
+                        </span>
+                        <!-- Credential Count -->
+                        <span id="credentialCount" class="bg-primary text-white text-sm px-3 py-1 rounded-full">0 tài khoản</span>
+                    </div>
+                </div>
+                
+                <!-- Stock = Credentials Explanation -->
+                <div class="bg-white rounded-lg p-4 mb-4 border border-blue-200">
+                    <div class="flex items-start gap-3">
+                        <i class="ph ph-info text-primary text-xl mt-0.5"></i>
+                        <div>
+                            <p class="text-sm text-gray-700 font-medium">Số lượng kho hàng = Số tài khoản thêm vào</p>
+                            <p class="text-xs text-gray-500 mt-1">
+                                Mỗi tài khoản là <strong>một sản phẩm có thể bán</strong>. Thêm tài khoản để tạo kho hàng.
+                                Thông tin tài khoản <strong>KHÔNG hiển thị công khai</strong> - chỉ người mua xem được sau khi thanh toán.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Validation Message -->
+                <div id="credentialValidation" class="hidden mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <div class="flex items-center gap-2 text-red-700">
+                        <i class="ph ph-warning-circle"></i>
+                        <span class="text-sm font-medium">Vui lòng thêm ít nhất 1 tài khoản để đăng bán!</span>
+                    </div>
+                </div>
+                
+                <!-- Credential List -->
+                <div id="credentialList" class="space-y-4 mb-4">
+                    <!-- Credential rows will be added here dynamically -->
+                </div>
+                
+                <!-- Add Credential Button -->
+                <button type="button" onclick="addCredentialRow()"
+                        class="w-full border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-primary hover:bg-blue-50/50 transition-all group">
+                    <i class="ph ph-plus-circle text-2xl text-gray-400 group-hover:text-primary transition-colors"></i>
+                    <p class="text-gray-600 font-medium mt-1 group-hover:text-primary">Thêm tài khoản vào kho</p>
+                </button>
+                
+                <div class="mt-4 pt-4 border-t border-gray-200">
+                    <p class="text-sm text-gray-500">
+                        <i class="ph ph-lightbulb text-warning mr-1"></i>
+                        <strong>Lưu ý:</strong> Bạn có thể thêm tài khoản sau khi tạo bài đăng trong trang "Quản lý tài khoản".
+                    </p>
+                </div>
+            </div>
+
+            <!-- Submit Buttons -->
+            <div class="card bg-gray-50">
+                <div class="flex flex-col sm:flex-row gap-4 justify-between">
+                    <a th:href="@{/seller/posts}" class="btn-outline flex items-center justify-center gap-2">
+                        <i class="ph ph-arrow-left"></i> Quay lại
+                    </a>
+                    <button type="submit" class="btn-primary px-8 py-3 flex items-center justify-center gap-2">
+                        <i class="ph ph-paper-plane-tilt"></i> Đăng bán
+                    </button>
+                </div>
+            </div>
+        </form>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center text-sm text-gray-500 border-t border-gray-800 pt-8">
+            <div class="flex items-center gap-2 mb-4 md:mb-0">
+                <i class="ph-fill ph-shield-check text-primary text-2xl"></i>
+                <span class="font-bold text-lg tracking-tight text-gray-300">TrustBridge Market</span>
+            </div>
+            <p>&copy;2026 TrustBridge Market. Bảo vệ qua hệ thống giao dịch trung gian.</p>
+        </div>
+    </footer>
+
+    <!-- Quill.js -->
+    <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+    <script>
+        // Initialize Quill editor
+        var quill = new Quill('#editor-container', {
+            theme: 'snow',
+            modules: {
+                toolbar: [
+                    [{ 'header': [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'color': [] }, { 'background': [] }],
+                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                    ['link', 'image'],
+                    ['clean']
+                ]
+            },
+            placeholder: 'Nhập mô tả chi tiết về sản phẩm của bạn...'
+        });
+
+        // Set initial content if editing
+        var existingDescription = document.getElementById('description').value;
+        if (existingDescription) {
+            quill.root.innerHTML = existingDescription;
+        }
+
+        // Sync Quill content to hidden input before form submit
+        document.querySelector('form').addEventListener('submit', function(e) {
+            document.getElementById('description').value = quill.root.innerHTML;
+            
+            // Validate credentials - must have at least 1
+            const credentialCount = document.getElementById('credentialList').children.length;
+            if (credentialCount === 0) {
+                e.preventDefault();
+                document.getElementById('credentialValidation').classList.remove('hidden');
+                // Scroll to validation message
+                document.getElementById('credentialValidation').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return false;
+            }
+            
+            // Check if at least one credential has data
+            const hasValidCredential = Array.from(document.querySelectorAll('.credential-row')).some(row => {
+                const username = row.querySelector('input[name$=".accountUsername"]');
+                const password = row.querySelector('input[name$=".accountPassword"]');
+                return username && password && username.value.trim() && password.value.trim();
+            });
+            
+            if (!hasValidCredential) {
+                e.preventDefault();
+                document.getElementById('credentialValidation').classList.remove('hidden');
+                document.getElementById('credentialValidation').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return false;
+            }
+            
+            document.getElementById('credentialValidation').classList.add('hidden');
+        });
+
+        // User menu toggle
+        function toggleUserMenu() {
+            document.getElementById('userMenu').classList.toggle('hidden');
+        }
+
+        document.addEventListener('click', function(e) {
+            const wrapper = document.getElementById('userMenuWrapper');
+            if (wrapper && !wrapper.contains(e.target)) {
+                document.getElementById('userMenu').classList.add('hidden');
+            }
+        });
+
+        // Image upload handling
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('thumbnailFile');
+        const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+        const previewContainer = document.getElementById('previewContainer');
+        const imagePreview = document.getElementById('imagePreview');
+        const fileName = document.getElementById('fileName');
+
+        // Click to select file
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        // Drag and drop handling
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-primary', 'bg-blue-50');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-primary', 'bg-blue-50');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-primary', 'bg-blue-50');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                handleFileSelect(files[0]);
+            }
+        });
+
+        // File input change
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        function handleFileSelect(file) {
+            if (!file.type.startsWith('image/')) {
+                alert('Vui lòng chọn file hình ảnh.');
+                clearImage();
+                return;
+            }
+
+            const maxFileSizeBytes = 20 * 1024 * 1024;
+            if (file.size > maxFileSizeBytes) {
+                alert('Hình ảnh vượt quá 20MB. Vui lòng chọn file nhỏ hơn.');
+                clearImage();
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+                fileName.textContent = file.name;
+                uploadPlaceholder.classList.add('hidden');
+                previewContainer.classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearImage() {
+            fileInput.value = '';
+            imagePreview.src = '';
+            fileName.textContent = '';
+            uploadPlaceholder.classList.remove('hidden');
+            previewContainer.classList.add('hidden');
+        }
+
+        // ==================== Credential Management ====================
+        
+        let credentialIndex = 0;
+        
+        function addCredentialRow(username = '', password = '', notes = '') {
+            const list = document.getElementById('credentialList');
+            const index = credentialIndex++;
+            
+            const row = document.createElement('div');
+            row.className = 'credential-row bg-white rounded-xl p-4 border border-gray-200 relative';
+            row.id = `credential-${index}`;
+            
+            row.innerHTML = `
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-sm font-bold text-gray-700">
+                        <i class="ph ph-user-circle text-primary mr-1"></i>
+                        Tài khoản #${index + 1}
+                    </span>
+                    <button type="button" onclick="removeCredentialRow(${index})" 
+                            class="text-gray-400 hover:text-error transition-colors">
+                        <i class="ph ph-trash text-lg"></i>
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Tên đăng nhập</label>
+                        <input type="text" name="credentials[${index}].accountUsername" 
+                               value="${username}"
+                               class="form-input text-sm py-2" 
+                               placeholder="VD: user@example.com">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Mật khẩu</label>
+                        <div class="relative">
+                            <input type="password" name="credentials[${index}].accountPassword" 
+                                   value="${password}"
+                                   class="form-input text-sm py-2 pr-10" 
+                                   placeholder="Nhập mật khẩu"
+                                   id="pwd-${index}">
+                            <button type="button" onclick="togglePwd(${index})" 
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                <i class="ph ph-eye" id="pwd-icon-${index}"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Ghi chú / Hướng dẫn</label>
+                    <textarea name="credentials[${index}].securityNotes" 
+                              class="form-input text-sm py-2 resize-none" rows="2"
+                              placeholder="VD: Profile 2, hạn sử dụng đến 31/12/2026...">${notes}</textarea>
+                </div>
+            `;
+            
+            list.appendChild(row);
+            updateCredentialCount();
+        }
+        
+        function removeCredentialRow(index) {
+            const row = document.getElementById(`credential-${index}`);
+            if (row) {
+                row.remove();
+                updateCredentialCount();
+            }
+        }
+        
+        function updateCredentialCount() {
+            const count = document.getElementById('credentialList').children.length;
+            document.getElementById('credentialCount').textContent = `${count} tài khoản`;
+            
+            // Update stock status badge
+            const badge = document.getElementById('stockStatusBadge');
+            if (count > 0) {
+                badge.className = 'inline-flex items-center px-3 py-1 text-sm font-bold rounded-full bg-green-100 text-green-700';
+                badge.innerHTML = '<i class="ph ph-check-circle mr-1"></i> Còn hàng';
+            } else {
+                badge.className = 'inline-flex items-center px-3 py-1 text-sm font-bold rounded-full bg-red-100 text-red-700';
+                badge.innerHTML = '<i class="ph ph-warning-circle mr-1"></i> Hết hàng';
+            }
+        }
+        
+        function togglePwd(index) {
+            const input = document.getElementById(`pwd-${index}`);
+            const icon = document.getElementById(`pwd-icon-${index}`);
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('ph-eye');
+                icon.classList.add('ph-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('ph-eye-slash');
+                icon.classList.add('ph-eye');
+            }
+        }
+        
+        // Add initial credential row
+        addCredentialRow();
+    </script>
+</body>
+
+</html>

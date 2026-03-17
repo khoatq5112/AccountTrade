@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lịch sử mua hàng | TrustBridge Market</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#137fec',
+                        surface: '#f5f7fa',
+                        success: '#22c55e',
+                        warning: '#f59e0b'
+                    },
+                    fontFamily: { sans: ['Manrope', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="font-sans antialiased bg-surface text-gray-900">
+<main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-8">
+        <div>
+            <p class="text-sm text-gray-500 mb-2">Buyer dashboard extension</p>
+            <h1 class="text-3xl font-extrabold">Lịch sử mua hàng</h1>
+            <p class="mt-2 text-gray-500">Theo dõi các giao dịch escrow bạn đã khởi tạo trên TrustBridge.</p>
+        </div>
+        <a href="/marketplace" class="rounded-2xl bg-white border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50">Quay lại marketplace</a>
+    </div>
+
+    <div th:if="${successMessage != null}" class="mb-6 rounded-2xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-success" th:text="${successMessage}">
+        Success message
+    </div>
+
+    <div th:if="${#lists.isEmpty(purchases)}" class="rounded-3xl border border-dashed border-gray-300 bg-white px-8 py-16 text-center">
+        <h2 class="text-2xl font-bold">Chưa có giao dịch nào</h2>
+        <p class="mt-2 text-gray-500">Khi bạn checkout một sản phẩm, giao dịch pending sẽ xuất hiện tại đây.</p>
+    </div>
+
+    <div th:if="${not #lists.isEmpty(purchases)}" class="space-y-4">
+        <article th:each="purchase : ${purchases}"
+                 class="rounded-3xl bg-white border p-6 shadow-sm"
+                 th:classappend="${highlightTransactionId != null and purchase.transactionId == highlightTransactionId} ? ' border-primary ring-2 ring-primary/10' : ' border-gray-100'">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                    <div class="flex flex-wrap items-center gap-3 mb-2">
+                        <p class="text-sm font-semibold text-primary" th:text="${'Transaction #' + purchase.transactionId}">Transaction</p>
+                        <span class="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-warning"
+                              th:text="${purchase.status != null ? purchase.status.statusName : 'Pending'}">Pending</span>
+                    </div>
+                    <a th:href="@{/marketplace/{postId}(postId=${purchase.post.postId})}" class="text-2xl font-extrabold hover:text-primary" th:text="${purchase.post.title}">Post title</a>
+                    <p class="mt-2 text-sm text-gray-500" th:text="${'Người bán: ' + (purchase.seller != null ? purchase.seller.username : 'Unknown')}">Seller</p>
+                    <p class="mt-1 text-sm text-gray-500" th:text="${'Khởi tạo lúc: ' + #temporals.format(purchase.createdAt, 'dd/MM/yyyy HH:mm')}">Created</p>
+                </div>
+                <div class="text-left lg:text-right">
+                    <p class="text-sm text-gray-500">Tổng tiền</p>
+                    <p class="text-3xl font-extrabold text-primary" th:text="${#numbers.formatDecimal(purchase.amount, 0, 'COMMA', 0, 'POINT') + ' ₫'}">0 ₫</p>
+                    <p class="mt-2 text-xs text-gray-500">Escrow fee: 0 ₫ trong giai đoạn này</p>
+                </div>
+            </div>
+        </article>
+    </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "name": "accounttrade",
+  "version": "1.0.0",
+  "main": "playwright.config.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/khoatq5112/AccountTrade.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/khoatq5112/AccountTrade/issues"
+  },
+  "homepage": "https://github.com/khoatq5112/AccountTrade#readme",
+  "description": "",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
+  }
+}

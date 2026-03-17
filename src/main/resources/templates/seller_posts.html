@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrustBridge Market | Quản lý bài đăng</title>
+    <!-- Google Fonts: Manrope -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#137fec',
+                        surface: '#f5f7fa',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        error: '#ef4444'
+                    },
+                    fontFamily: {
+                        sans: ['Manrope', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px rgba(0, 0, 0, 0.05)',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style type="text/tailwindcss">
+        body { background-color: #f5f7fa; color: #1a1a1a; }
+        .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .hover-lift:hover { transform: translateY(-4px); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08); }
+        .btn-primary { @apply bg-primary text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-blue-600; }
+        .btn-outline { @apply border border-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-gray-50; }
+        .btn-danger { @apply bg-error text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-red-600; }
+        .card { @apply bg-white rounded-xl shadow-soft border border-gray-100 p-6; }
+    </style>
+</head>
+
+<body class="font-sans antialiased">
+    <!-- Logged-in Navigation -->
+    <nav class="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-20 items-center">
+                <div class="flex items-center">
+                    <a href="/" class="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                        <i class="ph-fill ph-shield-check text-primary text-3xl"></i>
+                        <span class="font-bold text-2xl tracking-tight text-gray-900">TrustBridge</span>
+                    </a>
+                    <div class="hidden md:flex ml-10 space-x-8">
+                        <a th:href="@{/marketplace}"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Chợ trung gian</a>
+                        <a th:href="@{/seller/dashboard}"
+                            class="text-primary font-bold px-3 py-2 transition-colors border-b-2 border-primary">Dashboard
+                            Kênh Bán</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <div class="relative" id="userMenuWrapper">
+                        <button id="userMenuBtn" onclick="toggleUserMenu()"
+                            class="flex items-center gap-3 cursor-pointer group focus:outline-none">
+                            <div
+                                class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold shadow-soft group-hover:scale-105 transition-transform">
+                                <span th:text="${sellerUsername != null ? #strings.toUpperCase(#strings.substring(sellerUsername, 0, #strings.length(sellerUsername) >= 2 ? 2 : #strings.length(sellerUsername))) : 'SE'}">SE</span>
+                            </div>
+                            <div class="hidden md:block group-hover:opacity-80 transition-opacity text-left">
+                                <div class="text-sm font-bold text-gray-900 leading-tight" th:text="${sellerUsername}">Username</div>
+                                <div class="text-xs text-gray-500">Người bán uy tín</div>
+                            </div>
+                            <i class="ph ph-caret-down text-gray-400 text-sm"></i>
+                        </button>
+                        <!-- Dropdown -->
+                        <div id="userMenu"
+                            class="hidden absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
+                            <a th:href="@{/seller/dashboard}"
+                                class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-bold">
+                                <i class="ph ph-squares-four"></i> Dashboard
+                            </a>
+                            <div class="border-t border-gray-100 my-1"></div>
+                            <form action="/logout" method="POST">
+                                <button type="submit"
+                                    class="w-full flex items-center gap-2 px-4 py-2 text-sm text-error hover:bg-red-50 font-bold text-left">
+                                    <i class="ph ph-sign-out"></i> Đăng xuất
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Dashboard Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="flex flex-col md:flex-row gap-8">
+
+            <div th:replace="~{fragments/seller-sidebar :: sidebar(${sellerUsername}, ${sellerBadgeText}, ${activeSellerNav})}"></div>
+
+            <!-- Main Content -->
+            <main class="flex-1 space-y-6">
+                <!-- Alert Messages -->
+                <div th:if="${successMessage}" class="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center gap-2">
+                    <i class="ph-fill ph-check-circle text-success"></i>
+                    <span th:text="${successMessage}">Success message</span>
+                </div>
+                <div th:if="${errorMessage}" class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
+                    <i class="ph-fill ph-warning-circle text-error"></i>
+                    <span th:text="${errorMessage}">Error message</span>
+                </div>
+
+                <!-- Header -->
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
+                    <h1 class="text-2xl font-bold text-gray-900">Quản lý bài đăng</h1>
+                    <a th:href="@{/seller/posts/new}" class="btn-primary flex items-center gap-2">
+                        <i class="ph-bold ph-plus"></i> Đăng bài mới
+                    </a>
+                </div>
+
+                <!-- Filters Card -->
+                <div class="card">
+                    <form th:action="@{/seller/posts}" method="GET" class="flex flex-col md:flex-row gap-4">
+                        <!-- Search -->
+                        <div class="flex-1">
+                            <label class="block text-sm font-bold text-gray-600 mb-1">Tìm kiếm</label>
+                            <div class="relative">
+                                <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                <input type="text" name="keyword" th:value="${keyword}"
+                                    placeholder="Tìm theo tiêu đề..."
+                                    class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                        </div>
+
+                        <!-- Category Filter -->
+                        <div class="w-full md:w-48">
+                            <label class="block text-sm font-bold text-gray-600 mb-1">Danh mục</label>
+                            <select name="categoryId" class="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <option value="">Tất cả</option>
+                                <option th:each="cat : ${categories}" th:value="${cat.categoryId}" th:text="${cat.categoryName}" th:selected="${cat.categoryId == selectedCategoryId}"></option>
+                            </select>
+                        </div>
+
+                        <!-- Stock Status Filter -->
+                        <div class="w-full md:w-48">
+                            <label class="block text-sm font-bold text-gray-600 mb-1">Tình trạng kho</label>
+                            <select name="stockStatus" class="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <option value="">Tất cả</option>
+                                <option value="IN_STOCK" th:selected="${selectedStockStatus == 'IN_STOCK'}">Còn hàng</option>
+                                <option value="OUT_OF_STOCK" th:selected="${selectedStockStatus == 'OUT_OF_STOCK'}">Hết hàng</option>
+                            </select>
+                        </div>
+
+                        <!-- Filter Button -->
+                        <div class="flex items-end gap-2">
+                            <button type="submit" class="btn-primary flex items-center gap-2">
+                                <i class="ph-bold ph-funnel"></i> Lọc
+                            </button>
+                            <a th:href="@{/seller/posts}" class="btn-outline">
+                                <i class="ph-bold ph-arrow-counter-clockwise"></i>
+                            </a>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Posts Table -->
+                <div class="card">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <h2 class="text-xl font-bold text-gray-900">
+                            Danh sách bài đăng
+                            <span th:if="${totalItems > 0}" class="text-sm font-normal text-gray-500">
+                                (<span th:text="${totalItems}">0</span> bài)
+                            </span>
+                        </h2>
+                        <!-- Results Summary and Page Size -->
+                        <div th:if="${totalItems > 0}" class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                            <p class="text-sm text-gray-500">
+                                Hiển thị <span class="font-bold text-gray-700" th:text="${fromItem}">1</span>
+                                đến <span class="font-bold text-gray-700" th:text="${toItem}">10</span>
+                                trong tổng số <span class="font-bold text-gray-700" th:text="${totalItems}">0</span> kết quả
+                            </p>
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm text-gray-500">Hiển thị:</span>
+                                <select id="pageSize" onchange="changePageSize(this.value)"
+                                        class="px-3 py-1 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                                    <option value="10" th:selected="${pageSize == 10}">10</option>
+                                    <option value="25" th:selected="${pageSize == 25}">25</option>
+                                    <option value="50" th:selected="${pageSize == 50}">50</option>
+                                </select>
+                                <span class="text-sm text-gray-500">mỗi trang</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div th:if="${posts == null or posts.isEmpty()}" class="text-center py-12">
+                        <div class="w-20 h-20 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                            <i class="ph ph-package text-4xl text-gray-400"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-gray-600 mb-2">Chưa có bài đăng nào</h3>
+                        <p class="text-gray-500 mb-4">Bắt đầu đăng bán tài khoản của bạn ngay!</p>
+                        <a th:href="@{/seller/posts/new}" class="btn-primary inline-flex items-center gap-2">
+                            <i class="ph-bold ph-plus"></i> Đăng bài mới
+                        </a>
+                    </div>
+
+                    <!-- Table -->
+                    <div th:if="${posts != null and !posts.isEmpty()}" class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b-2 border-gray-100 text-xs uppercase tracking-wider text-gray-500">
+                                    <th class="py-3 px-4 font-bold">
+                                        <a th:href="@{/seller/posts(page=0, keyword=${keyword}, categoryId=${selectedCategoryId}, stockStatus=${selectedStockStatus}, size=${pageSize}, sort='postId', direction=${currentSort == 'postId' and currentDirection == 'desc' ? 'asc' : 'desc'})}"
+                                           class="hover:text-primary flex items-center gap-1">
+                                            ID
+                                            <i th:if="${currentSort == 'postId'}" class="ph ph-bold" th:classappend="${currentDirection == 'asc'} ? 'ph-caret-up text-primary' : 'ph-caret-down text-primary'"></i>
+                                            <i th:if="${currentSort != 'postId'}" class="ph ph-arrows-down-up text-gray-300"></i>
+                                        </a>
+                                    </th>
+                                    <th class="py-3 px-4 font-bold">Hình ảnh</th>
+                                    <th class="py-3 px-4 font-bold">
+                                        <a th:href="@{/seller/posts(page=0, keyword=${keyword}, categoryId=${selectedCategoryId}, stockStatus=${selectedStockStatus}, size=${pageSize}, sort='title', direction=${currentSort == 'title' and currentDirection == 'desc' ? 'asc' : 'desc'})}"
+                                           class="hover:text-primary flex items-center gap-1">
+                                            Tiêu đề
+                                            <i th:if="${currentSort == 'title'}" class="ph ph-bold" th:classappend="${currentDirection == 'asc'} ? 'ph-caret-up text-primary' : 'ph-caret-down text-primary'"></i>
+                                            <i th:if="${currentSort != 'title'}" class="ph ph-arrows-down-up text-gray-300"></i>
+                                        </a>
+                                    </th>
+                                    <th class="py-3 px-4 font-bold">Danh mục</th>
+                                    <th class="py-3 px-4 font-bold">
+                                        <a th:href="@{/seller/posts(page=0, keyword=${keyword}, categoryId=${selectedCategoryId}, stockStatus=${selectedStockStatus}, size=${pageSize}, sort='price', direction=${currentSort == 'price' and currentDirection == 'desc' ? 'asc' : 'desc'})}"
+                                           class="hover:text-primary flex items-center gap-1">
+                                            Giá
+                                            <i th:if="${currentSort == 'price'}" class="ph ph-bold" th:classappend="${currentDirection == 'asc'} ? 'ph-caret-up text-primary' : 'ph-caret-down text-primary'"></i>
+                                            <i th:if="${currentSort != 'price'}" class="ph ph-arrows-down-up text-gray-300"></i>
+                                        </a>
+                                    </th>
+                                    <th class="py-3 px-4 font-bold">
+                                        <a th:href="@{/seller/posts(page=0, keyword=${keyword}, categoryId=${selectedCategoryId}, stockStatus=${selectedStockStatus}, size=${pageSize}, sort='stockStatus', direction=${currentSort == 'stockStatus' and currentDirection == 'desc' ? 'asc' : 'desc'})}"
+                                           class="hover:text-primary flex items-center gap-1">
+                                            Trạng thái
+                                            <i th:if="${currentSort == 'stockStatus'}" class="ph ph-bold" th:classappend="${currentDirection == 'asc'} ? 'ph-caret-up text-primary' : 'ph-caret-down text-primary'"></i>
+                                            <i th:if="${currentSort != 'stockStatus'}" class="ph ph-arrows-down-up text-gray-300"></i>
+                                        </a>
+                                    </th>
+                                    <th class="py-3 px-4 font-bold">
+                                        <a th:href="@{/seller/posts(page=0, keyword=${keyword}, categoryId=${selectedCategoryId}, stockStatus=${selectedStockStatus}, size=${pageSize}, sort='createdAt', direction=${currentSort == 'createdAt' and currentDirection == 'desc' ? 'asc' : 'desc'})}"
+                                           class="hover:text-primary flex items-center gap-1">
+                                            Ngày tạo
+                                            <i th:if="${currentSort == 'createdAt'}" class="ph ph-bold" th:classappend="${currentDirection == 'asc'} ? 'ph-caret-up text-primary' : 'ph-caret-down text-primary'"></i>
+                                            <i th:if="${currentSort != 'createdAt'}" class="ph ph-arrows-down-up text-gray-300"></i>
+                                        </a>
+                                    </th>
+                                    <th class="py-3 px-4 font-bold text-right">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr th:each="post : ${posts}" class="hover:bg-gray-50 transition-colors group">
+                                    <!-- ID -->
+                                    <td class="py-4 px-4 font-mono text-sm text-gray-600">
+                                        #<span th:text="${post.postId}">1</span>
+                                    </td>
+                                    <!-- Thumbnail -->
+                                    <td class="py-4 px-4">
+                                        <img th:src="${post.resolvedThumbnailUrl}" alt="Thumbnail"
+                                            class="w-16 h-12 object-cover rounded-lg border border-gray-200">
+                                    </td>
+                                    <!-- Title -->
+                                    <td class="py-4 px-4">
+                                        <a th:href="@{/marketplace/{id}(id=${post.postId})}" target="_blank"
+                                            class="font-bold text-gray-900 hover:text-primary transition-colors line-clamp-2">
+                                            <span th:text="${post.title}">Post Title</span>
+                                        </a>
+                                    </td>
+                                    <!-- Category -->
+                                    <td class="py-4 px-4">
+                                        <span class="text-sm text-gray-600" th:text="${post.category.categoryName}">Category</span>
+                                    </td>
+                                    <!-- Price -->
+                                    <td class="py-4 px-4 font-bold text-gray-900">
+                                        <span th:text="${#numbers.formatDecimal(post.price, 0, 'POINT', 0, 'COMMA')} + ' ₫'">0 ₫</span>
+                                    </td>
+                                    <!-- Status -->
+                                    <td class="py-4 px-4">
+                                        <span th:switch="${post.stockStatus != null ? post.stockStatus.name() : 'OUT_OF_STOCK'}">
+                                            <span th:case="'IN_STOCK'" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 border border-green-200">
+                                                <i class="ph-fill ph-check-circle"></i> Còn hàng
+                                            </span>
+                                            <span th:case="'OUT_OF_STOCK'" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">
+                                                <i class="ph-fill ph-warning-circle"></i> Hết hàng
+                                            </span>
+                                            <span th:case="*" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-700 border border-gray-200">
+                                                <i class="ph-fill ph-question"></i> Chưa xác định
+                                            </span>
+                                        </span>
+                                    </td>
+                                    <!-- Created Date -->
+                                    <td class="py-4 px-4 text-sm text-gray-500">
+                                        <span th:text="${#temporals.format(post.createdAt, 'dd/MM/yyyy HH:mm')}">01/01/2026</span>
+                                    </td>
+                                    <!-- Actions -->
+                                    <td class="py-4 px-4 text-right">
+                                        <div class="flex items-center justify-end gap-2">
+                                            <!-- View -->
+                                            <a th:href="@{/marketplace/{id}(id=${post.postId})}" target="_blank"
+                                                class="p-2 text-gray-500 hover:text-primary hover:bg-blue-50 rounded-lg transition-colors"
+                                                title="Xem bài đăng">
+                                                <i class="ph-bold ph-eye text-lg"></i>
+                                            </a>
+                                            <!-- Edit -->
+                                            <a th:href="@{/seller/posts/{id}/edit(id=${post.postId})}"
+                                                class="p-2 text-gray-500 hover:text-primary hover:bg-blue-50 rounded-lg transition-colors"
+                                                title="Chỉnh sửa">
+                                                <i class="ph-bold ph-pencil-simple text-lg"></i>
+                                            </a>
+                                            <!-- Delete -->
+                                            <form th:action="@{/seller/posts/{id}/delete(id=${post.postId})}" method="POST"
+                                                class="inline" onsubmit="return confirm('Bạn có chắc muốn xóa bài đăng này?');">
+                                                <button type="submit"
+                                                    class="p-2 text-gray-500 hover:text-error hover:bg-red-50 rounded-lg transition-colors"
+                                                    title="Xóa">
+                                                    <i class="ph-bold ph-trash text-lg"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    <div th:if="${totalPages > 1}" class="flex justify-center items-center gap-2 mt-6 pt-6 border-t border-gray-100">
+                        <!-- Previous -->
+                        <a th:if="${currentPage > 0}"
+                            th:href="@{/seller/posts(page=${currentPage - 1}, keyword=${keyword}, categoryId=${selectedCategoryId}, stockStatus=${selectedStockStatus}, size=${pageSize}, sort=${currentSort}, direction=${currentDirection})}"
+                            class="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                            <i class="ph-bold ph-caret-left"></i>
+                        </a>
+                        <span th:if="${currentPage == 0}" class="px-3 py-2 text-gray-300 cursor-not-allowed">
+                            <i class="ph-bold ph-caret-left"></i>
+                        </span>
+
+                        <!-- Page Numbers -->
+                        <th:block th:each="i : ${#numbers.sequence(0, totalPages - 1)}">
+                            <a th:if="${i != currentPage}"
+                                th:href="@{/seller/posts(page=${i}, keyword=${keyword}, categoryId=${selectedCategoryId}, stockStatus=${selectedStockStatus}, size=${pageSize}, sort=${currentSort}, direction=${currentDirection})}"
+                                th:text="${i + 1}"
+                                class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors font-bold">
+                            </a>
+                            <span th:if="${i == currentPage}"
+                                th:text="${i + 1}"
+                                class="px-4 py-2 bg-primary text-white rounded-lg font-bold">
+                            </span>
+                        </th:block>
+
+                        <!-- Next -->
+                        <a th:if="${currentPage < totalPages - 1}"
+                            th:href="@{/seller/posts(page=${currentPage + 1}, keyword=${keyword}, categoryId=${selectedCategoryId}, stockStatus=${selectedStockStatus}, size=${pageSize}, sort=${currentSort}, direction=${currentDirection})}"
+                            class="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                            <i class="ph-bold ph-caret-right"></i>
+                        </a>
+                        <span th:if="${currentPage >= totalPages - 1}" class="px-3 py-2 text-gray-300 cursor-not-allowed">
+                            <i class="ph-bold ph-caret-right"></i>
+                        </span>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center text-sm text-gray-500 border-t border-gray-800 pt-8">
+            <div class="flex items-center gap-2 mb-4 md:mb-0">
+                <i class="ph-fill ph-shield-check text-primary text-2xl"></i>
+                <span class="font-bold text-lg tracking-tight text-gray-300">TrustBridge Market</span>
+            </div>
+            <p>&copy; 2026 TrustBridge Market. Bảo vệ qua hệ thống giao dịch trung gian.</p>
+        </div>
+    </footer>
+
+    <script>
+        function toggleUserMenu() {
+            document.getElementById('userMenu').classList.toggle('hidden');
+        }
+        document.addEventListener('click', function (e) {
+            const wrapper = document.getElementById('userMenuWrapper');
+            if (wrapper && !wrapper.contains(e.target)) {
+                document.getElementById('userMenu').classList.add('hidden');
+            }
+        });
+
+        function changePageSize(size) {
+            const url = new URL(window.location);
+            url.searchParams.set('size', size);
+            url.searchParams.set('page', '0'); // Reset to first page
+            window.location.href = url.toString();
+        }
+    </script>
+</body>
+
+</html>
