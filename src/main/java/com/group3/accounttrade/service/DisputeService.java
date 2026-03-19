@@ -1,6 +1,7 @@
 package com.group3.accounttrade.service;
 
 import com.group3.accounttrade.dto.DisputeDetailDTO;
+import com.group3.accounttrade.dto.DisputeDTO;
 import com.group3.accounttrade.dto.DisputeEventDTO;
 import com.group3.accounttrade.dto.DisputeMessageDTO;
 import com.group3.accounttrade.entity.*;
@@ -68,60 +69,137 @@ public class DisputeService {
      */
     @Transactional
     public Dispute openDispute(Long orderId, Integer buyerId, String reason, String description) {
+        return openDispute(orderId, buyerId, reason, description, List.of());
+    }
+
+    /**
+     * Opens a new dispute for an order with image evidence.
+     *
+     * @param orderId The order ID
+     * @param buyerId The buyer ID
+     * @param reason The dispute reason
+     * @param description Detailed description
+     * @param imageUrls List of image evidence URLs
+     * @return The created dispute
+     */
+    @Transactional
+    public Dispute openDispute(Long orderId, Integer buyerId, String reason, String description, List<String> imageUrls) {
+        log.info("[DISPUTE] Starting openDispute - orderId: {}, buyerId: {}, reason: {}", orderId, buyerId, reason);
+        
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+                .orElseThrow(() -> {
+                    log.error("[DISPUTE] Order not found: {}", orderId);
+                    return new IllegalArgumentException("Order not found: " + orderId);
+                });
+        log.info("[DISPUTE] Found order: {}, buyer: {}", order.getOrderNumber(), order.getBuyer().getUsername());
 
         // Verify buyer owns this order
         if (!order.getBuyer().getUserId().equals(buyerId)) {
+            log.error("[DISPUTE] Buyer mismatch - order buyer: {}, request buyer: {}", order.getBuyer().getUserId(), buyerId);
             throw new IllegalStateException("Only the buyer can open a dispute for this order");
         }
 
         // Check if order can be disputed
         String orderStatus = order.getOrderStatus().getStatusName();
-        if (!OrderStatus.CREDENTIAL_ASSIGNED.equals(orderStatus) && 
+        log.info("[DISPUTE] Order status: {}", orderStatus);
+        if (!OrderStatus.CREDENTIAL_ASSIGNED.equals(orderStatus) &&
             !OrderStatus.AWAITING_BUYER_CONFIRMATION.equals(orderStatus)) {
+            log.error("[DISPUTE] Order cannot be disputed in status: {}", orderStatus);
             throw new IllegalStateException("Order cannot be disputed in status: " + orderStatus);
         }
 
         // Check if dispute already exists
-        if (!disputeRepository.findByOrder(order).isEmpty()) {
+        List<Dispute> existingDisputes = disputeRepository.findByOrder(order);
+        if (!existingDisputes.isEmpty()) {
+            log.error("[DISPUTE] Dispute already exists for order: {}, existing count: {}", orderId, existingDisputes.size());
             throw new IllegalStateException("A dispute already exists for this order");
         }
 
         // Get opened status
+        log.info("[DISPUTE] Looking up OPENED status...");
         DisputeStatus openedStatus = disputeStatusRepository.findByStatusName(STATUS_OPENED)
-                .orElseThrow(() -> new IllegalStateException("OPENED status not found"));
+                .orElseThrow(() -> {
+                    log.error("[DISPUTE] OPENED status not found in database!");
+                    return new IllegalStateException("OPENED status not found");
+                });
+        log.info("[DISPUTE] Found OPENED status with ID: {}", openedStatus.getStatusId());
+
+        // Combine description with image URLs for evidence
+        String evidence = description != null ? description : "";
+        if (imageUrls != null && !imageUrls.isEmpty()) {
+            String imageEvidence = "\n\n[Bằng chứng hình ảnh]:\n" + String.join("\n", imageUrls);
+            evidence = evidence + imageEvidence;
+            log.info("[DISPUTE] Added {} image URLs to evidence", imageUrls.size());
+        }
+
+        // Get seller from order
+        log.info("[DISPUTE] Getting seller from order...");
+        User seller = getSellerFromOrder(order);
+        log.info("[DISPUTE] Seller: {}", seller.getUsername());
+
+        // Generate unique dispute number
+        String disputeNumber = generateDisputeNumber();
+        log.info("[DISPUTE] Generated dispute number: {}", disputeNumber);
 
         // Create dispute
+        log.info("[DISPUTE] Creating dispute entity...");
         Dispute dispute = Dispute.builder()
+                .disputeNumber(disputeNumber)
                 .order(order)
                 .openedBy(order.getBuyer())
-                .respondent(getSellerFromOrder(order))
+                .respondent(seller)
                 .disputeStatus(openedStatus)
                 .disputeType(reason)
                 .reason(reason)
-                .buyerEvidence(description)
+                .buyerEvidence(evidence)
                 .build();
+        
+        log.info("[DISPUTE] Saving dispute to database...");
         disputeRepository.save(dispute);
+        log.info("[DISPUTE] Dispute saved with ID: {}", dispute.getDisputeId());
 
         // Update order status to disputed
+        log.info("[DISPUTE] Looking up DISPUTED status...");
         OrderStatus disputedStatus = orderStatusRepository.findByStatusName(OrderStatus.DISPUTED)
-                .orElseThrow(() -> new IllegalStateException("DISPUTED status not found"));
+                .orElseThrow(() -> {
+                    log.error("[DISPUTE] DISPUTED status not found in database!");
+                    return new IllegalStateException("DISPUTED status not found");
+                });
         order.setOrderStatus(disputedStatus);
         orderRepository.save(order);
+        log.info("[DISPUTE] Order status updated to DISPUTED");
 
-        // Freeze escrow
-        escrowService.freezeEscrow(orderId, "Dispute opened: " + reason);
+        // Freeze escrow (if exists - may not exist for older orders)
+        log.info("[DISPUTE] Freezing escrow for order: {}", orderId);
+        try {
+            escrowService.freezeEscrow(orderId, "Dispute opened: " + reason);
+            log.info("[DISPUTE] Escrow frozen successfully");
+        } catch (IllegalArgumentException e) {
+            // Escrow doesn't exist for this order - log warning but continue
+            log.warn("[DISPUTE] No escrow found for order {}, continuing without freezing escrow: {}", orderId, e.getMessage());
+        } catch (Exception e) {
+            log.error("[DISPUTE] Failed to freeze escrow: {}", e.getMessage(), e);
+            throw e;
+        }
 
-        // Mark credentials as disputed
-        credentialService.markCredentialsAsDisputed(order, reason);
+        // Mark credentials as disputed (if any exist)
+        log.info("[DISPUTE] Marking credentials as disputed...");
+        try {
+            credentialService.markCredentialsAsDisputed(order, reason);
+            log.info("[DISPUTE] Credentials marked as disputed");
+        } catch (Exception e) {
+            log.warn("[DISPUTE] Could not mark credentials as disputed (may not exist): {}", e.getMessage());
+            // Don't throw - this is not critical for dispute creation
+        }
 
         // Create audit log
+        log.info("[DISPUTE] Creating audit log...");
         createAuditLog(order.getBuyer(), "DISPUTE_OPENED", "Dispute", dispute.getDisputeId(),
                 String.format("Dispute opened for order %s. Reason: %s", order.getOrderNumber(), reason),
                 AuditLog.ROLE_BUYER);
 
         // Notify seller
+        log.info("[DISPUTE] Sending notifications...");
         notifySeller(order, "Dispute Opened",
                 String.format("A dispute has been opened for order %s. Reason: %s", order.getOrderNumber(), reason));
         notifyBuyer(order, "Dispute Opened",
@@ -132,7 +210,7 @@ public class DisputeService {
         notifyAdmins("New Dispute Requires Review",
                 String.format("Dispute #%d for order %s requires review.", dispute.getDisputeId(), order.getOrderNumber()));
 
-        log.info("Dispute opened for order: {}, reason: {}", orderId, reason);
+        log.info("[DISPUTE] Dispute opened successfully - orderId: {}, disputeId: {}, reason: {}", orderId, dispute.getDisputeId(), reason);
 
         return dispute;
     }
@@ -229,28 +307,63 @@ public class DisputeService {
      */
     @Transactional
     public void resolveInBuyerFavor(Long disputeId, Integer adminId, String resolution, java.math.BigDecimal refundAmount) {
+        log.info("[DEBUG] resolveInBuyerFavor - Starting for disputeId: {}, adminId: {}, refundAmount: {}",
+                disputeId, adminId, refundAmount);
+        
         Dispute dispute = disputeRepository.findById(disputeId)
-                .orElseThrow(() -> new IllegalArgumentException("Dispute not found: " + disputeId));
+                .orElseThrow(() -> {
+                    log.error("[DEBUG] Dispute not found: {}", disputeId);
+                    return new IllegalArgumentException("Dispute not found: " + disputeId);
+                });
+        log.info("[DEBUG] Found dispute: {}", dispute.getDisputeId());
 
         User admin = getUserById(adminId);
+        log.info("[DEBUG] Admin lookup result: {}", admin != null ? admin.getUsername() : "null");
+
         Order order = dispute.getOrder();
+        log.info("[DEBUG] Order from dispute: {}", order != null ? order.getOrderId() : "null");
+        
+        if (order == null) {
+            log.error("[DEBUG] Order is null for dispute: {}", disputeId);
+            throw new IllegalStateException("Dispute has no associated order");
+        }
+        
+        log.info("[DEBUG] Order ID: {}, OrderNumber: {}", order.getOrderId(), order.getOrderNumber());
 
         // Update dispute status
+        log.info("[DEBUG] Looking up RESOLVED status...");
         DisputeStatus resolvedStatus = disputeStatusRepository.findByStatusName(STATUS_RESOLVED)
-                .orElseThrow(() -> new IllegalStateException("RESOLVED status not found"));
+                .orElseThrow(() -> {
+                    log.error("[DEBUG] RESOLVED status not found in database!");
+                    return new IllegalStateException("RESOLVED status not found");
+                });
         dispute.setDisputeStatus(resolvedStatus);
         dispute.setResolvedAt(LocalDateTime.now());
         dispute.setResolutionNotes(resolution);
         dispute.setResolutionType("BUYER_FAVOR");
         dispute.setResolvedByAdmin(admin);
         disputeRepository.save(dispute);
+        log.info("[DEBUG] Dispute status updated to RESOLVED");
 
         // Process refund
-        escrowService.refundEscrow(order.getOrderId(), refundAmount, resolution, adminId);
+        log.info("[DEBUG] Processing escrow refund for orderId: {}", order.getOrderId());
+        try {
+            escrowService.refundEscrow(order.getOrderId(), refundAmount, resolution, adminId);
+            log.info("[DEBUG] Escrow refund processed successfully");
+        } catch (Exception e) {
+            log.error("[DEBUG] Escrow refund failed: {} - {}", e.getClass().getName(), e.getMessage(), e);
+            throw e;
+        }
 
         // Create refund request record
+        log.info("[DEBUG] Creating refund request record...");
+        String refundNumber = generateRefundNumber();
+        log.info("[DEBUG] Generated refund number: {}", refundNumber);
+        
         RefundRequest refundRequest = RefundRequest.builder()
+                .refundNumber(refundNumber)
                 .order(order)
+                .dispute(dispute)
                 .requestedBy(order.getBuyer())
                 .refundType(RefundRequest.TYPE_DISPUTE_RESOLUTION)
                 .originalAmount(order.getTotalAmount())
@@ -259,34 +372,44 @@ public class DisputeService {
                 .status(RefundRequest.STATUS_APPROVED)
                 .processedByAdmin(admin)
                 .processedAt(LocalDateTime.now())
+                .approvedAt(LocalDateTime.now())
+                .approvedByAdmin(admin)
                 .build();
         refundRequestRepository.save(refundRequest);
+        log.info("[DEBUG] Refund request record created with number: {}", refundNumber);
 
         // Update order status
+        log.info("[DEBUG] Updating order status to REFUNDED...");
         OrderStatus refundedStatus = orderStatusRepository.findByStatusName(OrderStatus.REFUNDED)
-                .orElseThrow(() -> new IllegalStateException("REFUNDED status not found"));
+                .orElseThrow(() -> {
+                    log.error("[DEBUG] REFUNDED status not found in database!");
+                    return new IllegalStateException("REFUNDED status not found");
+                });
         order.setOrderStatus(refundedStatus);
         order.setCancelledAt(LocalDateTime.now());
         order.setCancellationReason("Dispute resolved in buyer favor: " + resolution);
         orderRepository.save(order);
+        log.info("[DEBUG] Order status updated to REFUNDED");
 
         // Revoke credentials
+        log.info("[DEBUG] Revoking credentials...");
         credentialService.revokeCredentials(order, "Dispute resolved in buyer favor");
+        log.info("[DEBUG] Credentials revoked");
 
         // Create audit log
         createAuditLog(admin, "DISPUTE_RESOLVED_BUYER", "Dispute", disputeId,
-                String.format("Dispute %d resolved in buyer favor. Refund: %s", disputeId, 
+                String.format("Dispute %d resolved in buyer favor. Refund: %s", disputeId,
                         refundAmount != null ? refundAmount : order.getTotalAmount()),
                 AuditLog.ROLE_ADMIN);
 
         // Notify parties
         notifyBuyer(order, "Dispute Resolved",
-                String.format("Your dispute for order %s has been resolved in your favor. Refund processed.", 
+                String.format("Your dispute for order %s has been resolved in your favor. Refund processed.",
                         order.getOrderNumber()));
         notifySeller(order, "Dispute Resolved",
                 String.format("The dispute for order %s has been resolved in buyer's favor.", order.getOrderNumber()));
 
-        log.info("Dispute {} resolved in buyer favor, refund: {}", disputeId, refundAmount);
+        log.info("[DEBUG] Dispute {} resolved in buyer favor successfully, refund: {}", disputeId, refundAmount);
     }
 
     /**
@@ -579,10 +702,27 @@ public class DisputeService {
      *
      * @param status Optional status filter (null for all)
      * @param pageable Pagination parameters
-     * @return Page of disputes
+     * @return Page of DisputeDTO
      */
-    public Page<Dispute> getAllDisputesPaginated(String status, Pageable pageable) {
-        return disputeRepository.findAllWithStatus(status, pageable);
+    public Page<DisputeDTO> getAllDisputesPaginated(String status, Pageable pageable) {
+        Page<Dispute> disputesPage = disputeRepository.findAllWithStatus(status, pageable);
+        return disputesPage.map(this::mapToDisputeDTO);
+    }
+
+    private DisputeDTO mapToDisputeDTO(Dispute dispute) {
+        Order order = dispute.getOrder();
+        return new DisputeDTO(
+                dispute.getDisputeId(),
+                dispute.getDisputeNumber(),
+                order != null ? order.getOrderNumber() : "N/A",
+                order != null ? order.getTotalAmount() : BigDecimal.ZERO,
+                dispute.getReason(),
+                dispute.getOpenedBy() != null ? dispute.getOpenedBy().getUsername() : "N/A",
+                dispute.getRespondent() != null ? dispute.getRespondent().getUsername() : "N/A",
+                dispute.getOpenedAt(),
+                dispute.getDisputeStatus() != null ? dispute.getDisputeStatus().getStatusName() : "N/A",
+                dispute.getDisputeType()
+        );
     }
 
     /**
@@ -934,6 +1074,28 @@ public class DisputeService {
     private String truncate(String str, int maxLength) {
         if (str == null) return "";
         return str.length() > maxLength ? str.substring(0, maxLength) + "..." : str;
+    }
+
+    /**
+     * Generates a unique dispute number.
+     * Format: DSP-YYYYMMDD-XXXXX
+     */
+    private String generateDisputeNumber() {
+        String datePart = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")
+                .format(java.time.LocalDate.now());
+        long count = disputeRepository.count() + 1;
+        return String.format("DSP-%s-%05d", datePart, count);
+    }
+
+    /**
+     * Generates a unique refund number.
+     * Format: RFD-YYYYMMDD-XXXXX
+     */
+    private String generateRefundNumber() {
+        String datePart = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")
+                .format(java.time.LocalDate.now());
+        long count = refundRequestRepository.count() + 1;
+        return String.format("RFD-%s-%05d", datePart, count);
     }
 
     /**

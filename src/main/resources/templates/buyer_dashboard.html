@@ -125,27 +125,23 @@
                     <nav class="p-4 space-y-1">
                         <a th:href="@{/buyer/dashboard}"
                             class="flex items-center gap-3 px-4 py-3 bg-blue-50 text-primary font-bold rounded-lg transition-colors">
-                            <i class="ph-fill ph-squares-four text-lg"></i> <span th:text="#{sidebar.overview}">Overview</span>
+                            <i class="ph-fill ph-squares-four text-lg"></i> Tổng quan
                         </a>
                         <a th:href="@{/buyer/purchases}"
                             class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
-                            <i class="ph ph-shopping-cart text-lg"></i> <span th:text="#{sidebar.processingOrders}">Processing Orders</span>
-                        </a>
-                        <a th:href="@{/buyer/purchases}"
-                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
-                            <i class="ph ph-clock-counter-clockwise text-lg"></i> <span>Order History</span>
+                            <i class="ph ph-clock-counter-clockwise text-lg"></i> Lịch sử giao dịch
                         </a>
                         <a th:href="@{/wallet}"
                             class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
-                            <i class="ph ph-wallet text-lg"></i> <span th:text="#{sidebar.walletPayment}">Wallet & Payment</span>
+                            <i class="ph ph-wallet text-lg"></i> Ví & Thanh toán
                         </a>
                         <a th:href="@{/buyer/settings}"
                             class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
-                            <i class="ph ph-gear text-lg"></i> <span th:text="#{sidebar.accountSettings}">Account Settings</span>
+                            <i class="ph ph-gear text-lg"></i> Cài đặt tài khoản
                         </a>
                         <a th:href="@{/buyer/disputes}"
                             class="flex items-center gap-3 px-4 py-3 text-error hover:bg-red-50 font-bold rounded-lg transition-colors mt-6 border border-transparent hover:border-red-100">
-                            <i class="ph ph-warning-circle text-lg"></i> <span th:text="#{sidebar.disputeCenter}">Dispute Center</span>
+                            <i class="ph ph-warning-circle text-lg"></i> Trung tâm khiếu nại
                         </a>
                     </nav>
                 </div>
@@ -210,64 +206,6 @@
                         <div class="text-3xl font-bold text-gray-900">
                             <span th:text="${#numbers.formatDecimal(totalSpent, 1, 'DEFAULT', 0, 'DEFAULT')} + ' ₫'">0 ₫</span>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Active Escrow Orders -->
-                <div class="card">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-xl font-bold text-gray-900">Pending Orders</h2>
-                        <a th:href="@{/buyer/purchases}"
-                            class="text-sm font-bold text-primary hover:text-blue-700 hover:underline flex items-center gap-1">
-                            <span th:text="#{transaction.viewAll}">View All</span> <i class="ph-bold ph-arrow-right"></i>
-                        </a>
-                    </div>
-
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="border-b-2 border-gray-100 text-xs uppercase tracking-wider text-gray-500">
-                                    <th class="py-3 px-4 font-bold">Order ID</th>
-                                    <th class="py-3 px-4 font-bold" th:text="#{transaction.productSeller}">Product / Seller</th>
-                                    <th class="py-3 px-4 font-bold" th:text="#{transaction.amountEscrow}">Amount (Escrow)</th>
-                                    <th class="py-3 px-4 font-bold" th:text="#{transaction.status}">Status</th>
-                                    <th class="py-3 px-4 font-bold text-right" th:text="#{transaction.action}">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100">
-                                <tr th:each="order : ${pendingOrders}" class="hover:bg-gray-50 transition-colors group">
-                                    <td class="py-4 px-4 font-mono text-sm text-gray-600" th:text="${order.orderNumber}">ORD-0000</td>
-                                    <td class="py-4 px-4">
-                                        <div class="font-bold text-gray-900 text-sm" th:text="${!#lists.isEmpty(order.orderItems) ? order.orderItems[0].postTitleSnapshot : 'Order item'}">Product Name</div>
-                                        <div class="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                                            <i class="ph-fill ph-user text-gray-400"></i>
-                                            <span th:text="${!#lists.isEmpty(order.orderItems) and order.orderItems[0].seller != null ? order.orderItems[0].seller.username : 'Seller'}">SellerName</span>
-                                        </div>
-                                    </td>
-                                    <td class="py-4 px-4 font-bold text-gray-900" th:text="${#numbers.formatDecimal(order.totalAmount, 1, 'DEFAULT', 0, 'DEFAULT')} + ' ₫'">0 ₫</td>
-                                    <td class="py-4 px-4">
-                                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-700 border border-orange-200 shadow-sm">
-                                            <span class="relative flex h-2 w-2">
-                                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                                                <span class="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
-                                            </span>
-                                            <span th:text="${order.orderStatus.statusName}">Status</span>
-                                        </span>
-                                    </td>
-                                    <td class="py-4 px-4 text-right">
-                                        <div class="flex items-center justify-end gap-2">
-                                            <button class="text-xs font-bold bg-error text-white hover:bg-red-600 px-3 py-2 rounded-lg transition-colors shadow-sm" th:text="#{transaction.dispute}">Dispute</button>
-                                            <button class="text-xs font-bold btn-primary px-3 py-2 shadow-sm" th:text="#{transaction.confirmReceived}">Confirm Received</button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr th:if="${pendingOrders == null or pendingOrders.isEmpty()}">
-                                    <td colspan="5" class="py-8 text-center text-gray-500">
-                                        No pending orders
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
                     </div>
                 </div>
 

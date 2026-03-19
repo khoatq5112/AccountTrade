@@ -215,16 +215,14 @@
                 <!-- Disputes Table -->
                 <div class="card border border-red-100">
                     <div class="flex justify-between items-center mb-6">
-                        <div class="flex items-center gap-2">
-                            <h2 class="text-xl font-bold text-gray-900">Danh sách khiếu nại</h2>
-                            <span class="bg-error text-white text-xs font-bold px-2 py-0.5 rounded-full">Khẩn cấp</span>
-                        </div>
+                        <h2 class="text-xl font-bold text-gray-900">Danh sách khiếu nại</h2>
                         <select id="status-filter" onchange="AdminDisputes.filterByStatus(this.value)"
                             class="text-sm font-bold text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
                             <option value="">Tất cả trạng thái</option>
                             <option value="OPENED">Chờ xử lý</option>
                             <option value="UNDER_REVIEW">Đang điều tra</option>
                             <option value="RESOLVED">Đã giải quyết</option>
+                            <option value="CANCELLED">Đã hủy</option>
                         </select>
                     </div>
 
@@ -238,9 +236,10 @@
                         <table class="w-full text-left border-collapse">
                             <thead>
                                 <tr class="border-b-2 border-gray-100 text-xs uppercase tracking-wider text-gray-500">
-                                    <th class="py-3 px-4 font-bold">Mã GD / Giá</th>
-                                    <th class="py-3 px-4 font-bold">Nội dung khiếu nại</th>
+                                    <th class="py-3 px-4 font-bold">Mã khiếu nại</th>
+                                    <th class="py-3 px-4 font-bold">Nội dung</th>
                                     <th class="py-3 px-4 font-bold">Bên liên quan</th>
+                                    <th class="py-3 px-4 font-bold">Trạng thái</th>
                                     <th class="py-3 px-4 font-bold">Thời gian</th>
                                     <th class="py-3 px-4 font-bold text-right">Thao tác</th>
                                 </tr>

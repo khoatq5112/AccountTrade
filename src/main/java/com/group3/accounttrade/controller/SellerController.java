@@ -111,7 +111,12 @@ public class SellerController {
      * Display the form for creating a new post.
      */
     @GetMapping("/posts/new")
-    public String showCreatePostForm(Model model) {
+    public String showCreatePostForm(Model model, Authentication authentication) {
+        // Add current user for sidebar
+        String username = authentication.getName();
+        User user = userRepository.findByUsername(username).orElse(null);
+        model.addAttribute("currentUser", user);
+
         model.addAttribute("postForm", new PostForm());
 
         // Get all categories as a simple list

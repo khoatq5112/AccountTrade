@@ -289,15 +289,29 @@ public class EscrowService {
      */
     @Transactional
     public Escrow refundEscrow(Long orderId, BigDecimal amount, String reason, Integer processedBy) {
+        log.info("[DEBUG] refundEscrow - Starting for orderId: {}, amount: {}, processedBy: {}",
+                orderId, amount, processedBy);
+        
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+                .orElseThrow(() -> {
+                    log.error("[DEBUG] Order not found: {}", orderId);
+                    return new IllegalArgumentException("Order not found: " + orderId);
+                });
+        log.info("[DEBUG] Found order: {}", order.getOrderNumber());
         
         Escrow escrow = escrowRepository.findByOrder(order)
-                .orElseThrow(() -> new IllegalArgumentException("Escrow not found for order: " + orderId));
+                .orElseThrow(() -> {
+                    log.error("[DEBUG] Escrow not found for order: {}", orderId);
+                    return new IllegalArgumentException("Escrow not found for order: " + orderId);
+                });
+        log.info("[DEBUG] Found escrow: {}, status: {}", escrow.getEscrowId(), escrow.getEscrowStatus().getStatusName());
 
         // Can refund from HOLDING or FROZEN status
         String currentStatus = escrow.getEscrowStatus().getStatusName();
+        log.info("[DEBUG] Current escrow status: {}", currentStatus);
+        
         if (!currentStatus.equals(STATUS_HOLDING) && !currentStatus.equals(STATUS_FROZEN)) {
+            log.error("[DEBUG] Cannot refund from status: {}", currentStatus);
             throw new IllegalStateException("Escrow cannot be refunded from status: " + currentStatus);
         }
 
@@ -335,9 +349,23 @@ public class EscrowService {
             orderRepository.save(order);
         }
 
+        // Credit buyer's wallet
+        User buyer = order.getBuyer();
+        Wallet buyerWallet = walletRepository.findByUser(buyer)
+                .orElseGet(() -> Wallet.builder()
+                        .user(buyer)
+                        .balance(BigDecimal.ZERO)
+                        .frozenBalance(BigDecimal.ZERO)
+                        .build());
+        BigDecimal currentBalance = buyerWallet.getBalance() != null ? buyerWallet.getBalance() : BigDecimal.ZERO;
+        buyerWallet.setBalance(currentBalance.add(refundAmount));
+        walletRepository.save(buyerWallet);
+        log.info("[DEBUG] Credited buyer wallet - userId: {}, amount: {}, newBalance: {}",
+                buyer.getUserId(), refundAmount, buyerWallet.getBalance());
+
         // Create audit log
         createAuditLog(adminUser, "ESCROW_REFUNDED", "Escrow", escrow.getEscrowId(),
-                String.format("Escrow refunded for order %s. Amount: %s. Reason: %s", 
+                String.format("Escrow refunded for order %s. Amount: %s. Reason: %s",
                         order.getOrderNumber(), refundAmount, reason),
                 AuditLog.ROLE_ADMIN);
 

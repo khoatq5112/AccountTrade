@@ -5,10 +5,14 @@ import com.group3.accounttrade.dto.ChartDataPoint;
 import com.group3.accounttrade.dto.DisputeDTO;
 import com.group3.accounttrade.dto.DisputeDetailDTO;
 import com.group3.accounttrade.dto.PendingPostDTO;
+import com.group3.accounttrade.dto.TransactionDTO;
+import com.group3.accounttrade.dto.TransactionStatsDTO;
 import com.group3.accounttrade.dto.UserDTO;
 import com.group3.accounttrade.service.AdminDashboardService;
+import com.group3.accounttrade.service.AdminTransactionService;
 import com.group3.accounttrade.service.DisputeService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,10 +31,12 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
+@Slf4j
 public class AdminDashboardController {
 
     private final AdminDashboardService adminDashboardService;
     private final DisputeService disputeService;
+    private final AdminTransactionService adminTransactionService;
 
     /**
      * Gets aggregated dashboard statistics.
@@ -152,7 +158,7 @@ public class AdminDashboardController {
             @RequestParam(defaultValue = "10") int size) {
         
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
-        Page<com.group3.accounttrade.entity.Dispute> disputesPage = disputeService.getAllDisputesPaginated(status, pageable);
+        Page<com.group3.accounttrade.dto.DisputeDTO> disputesPage = disputeService.getAllDisputesPaginated(status, pageable);
         
         Map<String, Object> response = new HashMap<>();
         response.put("content", disputesPage.getContent());
@@ -251,21 +257,34 @@ public class AdminDashboardController {
             @RequestParam(required = false) BigDecimal refundAmount,
             Authentication authentication) {
         
+        log.info("[DEBUG] resolveInBuyerFavor called - disputeId: {}, resolution: {}, refundAmount: {}",
+                disputeId, resolution, refundAmount);
+        
         com.group3.accounttrade.entity.User admin = adminDashboardService.getUserByUsername(authentication.getName());
         if (admin == null) {
+            log.error("[DEBUG] Admin not found for authentication: {}", authentication.getName());
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Admin not found"));
         }
         
         try {
+            log.info("[DEBUG] Calling disputeService.resolveInBuyerFavor with adminId: {}", admin.getUserId());
             disputeService.resolveInBuyerFavor(disputeId, admin.getUserId(), resolution, refundAmount);
+            log.info("[DEBUG] resolveInBuyerFavor completed successfully");
             
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("message", "Dispute resolved in buyer's favor");
             response.put("disputeId", disputeId);
             return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException | IllegalStateException e) {
+        } catch (IllegalArgumentException e) {
+            log.error("[DEBUG] IllegalArgumentException in resolveInBuyerFavor: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
+        } catch (IllegalStateException e) {
+            log.error("[DEBUG] IllegalStateException in resolveInBuyerFavor: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
+        } catch (Exception e) {
+            log.error("[DEBUG] UNEXPECTED EXCEPTION in resolveInBuyerFavor: {} - {}", e.getClass().getName(), e.getMessage(), e);
+            return ResponseEntity.internalServerError().body(Map.of("success", false, "message", "Lỗi hệ thống: " + e.getMessage()));
         }
     }
 
@@ -345,5 +364,91 @@ public class AdminDashboardController {
     public ResponseEntity<DisputeService.DisputeStats> getDisputeStats() {
         DisputeService.DisputeStats stats = disputeService.getDisputeStats();
         return ResponseEntity.ok(stats);
+    }
+
+    // ==================== Transaction History Endpoints ====================
+
+    /**
+     * Gets paginated transaction history with optional filters.
+     * All transactions are Orders in the system.
+     *
+     * @param keyword Optional keyword search (order number, buyer username, seller username)
+     * @param status Optional status filter (PENDING, COMPLETED, CANCELLED, REFUNDED, etc.)
+     * @param from Optional start date filter
+     * @param to Optional end date filter
+     * @param page Page number (0-indexed)
+     * @param size Page size
+     * @return Page of transactions
+     */
+    @GetMapping("/transactions")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> getAllTransactions(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+
+        java.time.LocalDateTime fromDateTime = null;
+        java.time.LocalDateTime toDateTime = null;
+
+        if (from != null && !from.isEmpty()) {
+            try {
+                fromDateTime = java.time.LocalDate.parse(from).atStartOfDay();
+            } catch (Exception e) {
+                log.warn("Invalid 'from' date format: {}", from);
+            }
+        }
+
+        if (to != null && !to.isEmpty()) {
+            try {
+                toDateTime = java.time.LocalDate.parse(to).atTime(23, 59, 59);
+            } catch (Exception e) {
+                log.warn("Invalid 'to' date format: {}", to);
+            }
+        }
+
+        Page<TransactionDTO> transactionsPage = adminTransactionService.getAllTransactions(
+                keyword, status, fromDateTime, toDateTime, pageable);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("content", transactionsPage.getContent());
+        response.put("totalElements", transactionsPage.getTotalElements());
+        response.put("totalPages", transactionsPage.getTotalPages());
+        response.put("currentPage", page);
+        response.put("pageSize", size);
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Gets transaction statistics.
+     *
+     * @return TransactionStatsDTO
+     */
+    @GetMapping("/transactions/stats")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<TransactionStatsDTO> getTransactionStats() {
+        TransactionStatsDTO stats = adminTransactionService.getTransactionStats();
+        return ResponseEntity.ok(stats);
+    }
+
+    /**
+     * Gets detailed transaction information.
+     *
+     * @param transactionId The transaction ID (format: TXN-TYPE-ID)
+     * @return TransactionDTO
+     */
+    @GetMapping("/transactions/{transactionId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<TransactionDTO> getTransactionDetail(@PathVariable String transactionId) {
+        java.util.Optional<TransactionDTO> transaction = adminTransactionService.getTransactionById(transactionId);
+        if (transaction.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(transaction.get());
     }
 }

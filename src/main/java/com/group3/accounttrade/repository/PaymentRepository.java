@@ -3,6 +3,7 @@ package com.group3.accounttrade.repository;
 import com.group3.accounttrade.entity.Order;
 import com.group3.accounttrade.entity.Payment;
 import com.group3.accounttrade.entity.PaymentStatus;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -40,4 +41,19 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     boolean existsByVnpayTxnRef(String vnpayTxnRef);
 
     boolean existsByPaymentId(String paymentId);
+
+    /**
+     * Override findById to load all related entities eagerly using EntityGraph.
+     * This handles null relationships gracefully unlike JOIN FETCH.
+     */
+    @Override
+    @EntityGraph(attributePaths = {
+        "order", 
+        "order.buyer", 
+        "order.orderItems", 
+        "order.orderItems.post", 
+        "order.orderItems.seller",
+        "paymentStatus"
+    })
+    Optional<Payment> findById(Long id);
 }

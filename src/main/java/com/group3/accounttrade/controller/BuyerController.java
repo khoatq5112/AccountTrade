@@ -14,6 +14,7 @@ import com.group3.accounttrade.repository.UserRepository;
 import com.group3.accounttrade.repository.WalletRepository;
 import com.group3.accounttrade.service.BuyerOrderService;
 import com.group3.accounttrade.service.CartService;
+import com.group3.accounttrade.service.CloudinaryService;
 import com.group3.accounttrade.service.DisputeService;
 import com.group3.accounttrade.service.OrderCheckoutService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,9 +32,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
@@ -50,6 +53,7 @@ public class BuyerController {
     private final BuyerOrderService buyerOrderService;
     private final OrderCheckoutService orderCheckoutService;
     private final DisputeService disputeService;
+    private final CloudinaryService cloudinaryService;
 
     @GetMapping("/dashboard")
     public String viewBuyerDashboard(Model model) {
@@ -75,6 +79,30 @@ public class BuyerController {
         model.addAttribute("pendingOrders", summary.pendingOrders());
 
         return "buyer_dashboard";
+    }
+
+    @GetMapping("/settings")
+    public String buyerSettings(Model model) {
+        User user = getCurrentUser();
+        if (user == null) {
+            return "redirect:/login.html";
+        }
+        model.addAttribute("currentUser", user);
+        Wallet wallet = walletRepository.findByUser_UserId(user.getUserId()).orElse(null);
+        model.addAttribute("walletBalance", wallet != null ? wallet.getBalance() : BigDecimal.ZERO);
+        return "buyer_settings";
+    }
+
+    @GetMapping("/wallet")
+    public String buyerWallet(Model model) {
+        User user = getCurrentUser();
+        if (user == null) {
+            return "redirect:/login.html";
+        }
+        model.addAttribute("currentUser", user);
+        Wallet wallet = walletRepository.findByUser_UserId(user.getUserId()).orElse(null);
+        model.addAttribute("walletBalance", wallet != null ? wallet.getBalance() : BigDecimal.ZERO);
+        return "buyer_wallet";
     }
 
     @GetMapping("/checkout")
@@ -241,21 +269,57 @@ public class BuyerController {
     public String openOrderDispute(@PathVariable Long orderId,
                                    @RequestParam String reason,
                                    @RequestParam(required = false) String description,
+                                   @RequestParam(required = false) MultipartFile[] evidenceImages,
                                    RedirectAttributes redirectAttributes) {
+        log.info("[DISPUTE] Opening dispute for order: {}, reason: {}", orderId, reason);
+        
         User user = getCurrentUser();
         if (user == null) {
+            log.warn("[DISPUTE] User is null, redirecting to login");
             return "redirect:/login.html?redirect=/buyer/purchases";
         }
         if (isSellerAccount(user)) {
+            log.warn("[DISPUTE] User is seller, redirecting to marketplace");
             return "redirect:/marketplace?error=seller_restricted";
         }
 
         try {
-            disputeService.openDispute(orderId, user.getUserId(), reason, description);
+            log.info("[DISPUTE] User {} opening dispute for order {}", user.getUsername(), orderId);
+            
+            // Upload images to Cloudinary and collect URLs
+            List<String> imageUrls = new ArrayList<>();
+            if (evidenceImages != null && evidenceImages.length > 0) {
+                log.info("[DISPUTE] Processing {} evidence images", evidenceImages.length);
+                for (MultipartFile file : evidenceImages) {
+                    if (file != null && !file.isEmpty()) {
+                        try {
+                            String imageUrl = cloudinaryService.uploadImage(file);
+                            if (imageUrl != null) {
+                                imageUrls.add(imageUrl);
+                                log.info("[DISPUTE] Uploaded image: {}", imageUrl);
+                            }
+                        } catch (Exception e) {
+                            log.warn("[DISPUTE] Failed to upload dispute evidence image: {}", e.getMessage());
+                        }
+                    }
+                }
+            }
+
+            // Open dispute with image evidence
+            log.info("[DISPUTE] Calling disputeService.openDispute with orderId={}, buyerId={}, reason={}, description={}, imageCount={}",
+                    orderId, user.getUserId(), reason, description, imageUrls.size());
+            
+            Dispute dispute = disputeService.openDispute(orderId, user.getUserId(), reason, description, imageUrls);
+            
+            log.info("[DISPUTE] Dispute created successfully with ID: {}", dispute.getDisputeId());
             redirectAttributes.addFlashAttribute("successMessage",
                     "Khiếu nại đã được tạo. Escrow đã bị đóng băng và TrustBridge sẽ chỉ can thiệp ở bước xử lý tranh chấp.");
         } catch (IllegalArgumentException | IllegalStateException e) {
+            log.error("[DISPUTE] Failed to create dispute: {}", e.getMessage(), e);
             redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+        } catch (Exception e) {
+            log.error("[DISPUTE] Unexpected error creating dispute: {}", e.getMessage(), e);
+            redirectAttributes.addFlashAttribute("errorMessage", "Có lỗi xảy ra khi tạo khiếu nại: " + e.getMessage());
         }
 
         return "redirect:/buyer/purchases?orderId=" + orderId;

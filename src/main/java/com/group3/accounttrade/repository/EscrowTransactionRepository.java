@@ -3,6 +3,7 @@ package com.group3.accounttrade.repository;
 import com.group3.accounttrade.entity.Escrow;
 import com.group3.accounttrade.entity.EscrowTransaction;
 import com.group3.accounttrade.entity.User;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Repository for EscrowTransaction entity.
@@ -38,4 +40,20 @@ public interface EscrowTransactionRepository extends JpaRepository<EscrowTransac
 
     @Query("SELECT COUNT(et) FROM EscrowTransaction et WHERE et.transactionType = :transactionType")
     long countByTransactionType(String transactionType);
+
+    /**
+     * Override findById to load all related entities eagerly using EntityGraph.
+     * This handles null relationships gracefully unlike JOIN FETCH.
+     */
+    @Override
+    @EntityGraph(attributePaths = {
+        "escrow", 
+        "escrow.order", 
+        "escrow.order.buyer", 
+        "escrow.order.orderItems",
+        "escrow.order.orderItems.post",
+        "escrow.order.orderItems.seller",
+        "escrow.escrowStatus"
+    })
+    Optional<EscrowTransaction> findById(Long id);
 }

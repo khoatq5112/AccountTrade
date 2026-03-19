@@ -15,7 +15,9 @@ public record DisputeDTO(
     String reason,
     String buyerName,
     String sellerName,
-    LocalDateTime openedAt
+    LocalDateTime openedAt,
+    String status,
+    String disputeType
 ) {
     /**
      * Formats the order amount as Vietnamese currency.

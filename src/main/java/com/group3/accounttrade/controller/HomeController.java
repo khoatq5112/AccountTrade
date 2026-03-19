@@ -57,6 +57,23 @@ public class HomeController {
         return "register";
     }
 
+    @GetMapping("/wallet")
+    public String viewWallet() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAuthenticated = auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal());
+        if (!isAuthenticated) {
+            return "redirect:/login";
+        }
+        String role = auth.getAuthorities().stream()
+                .findFirst()
+                .map(a -> a.getAuthority())
+                .orElse("");
+        if (role.contains("SELLER")) {
+            return "redirect:/seller/dashboard";
+        }
+        return "redirect:/buyer/wallet";
+    }
+
     private void attachAuthState(Model model) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         boolean isAuthenticated = auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal());

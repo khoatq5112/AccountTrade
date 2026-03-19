@@ -1,22 +1,365 @@
 <!DOCTYPE html>
-<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="https://www.thymeleaf.org/thymeleaf-extras-springsecurity6">
+
 <head>
     <meta charset="UTF-8">
-    <title>Admin - Transactions</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrustBridge Market | Lịch sử giao dịch</title>
+    <!-- CSRF Meta Tags -->
+    <meta name="_csrf" th:content="${_csrf != null ? _csrf.token : ''}" />
+    <meta name="_csrf_header" th:content="${_csrf != null ? _csrf.headerName : ''}" />
+    <!-- Google Fonts: Manrope -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#137fec',
+                        surface: '#f5f7fa',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        error: '#ef4444'
+                    },
+                    fontFamily: {
+                        sans: ['Manrope', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px rgba(0, 0, 0, 0.05)',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style type="text/tailwindcss">
+        body { background-color: #f5f7fa; color: #1a1a1a; }
+        .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .hover-lift:hover { transform: translateY(-4px); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08); }
+        .btn-primary { @apply bg-primary text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-blue-600; }
+        .btn-outline { @apply border border-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-gray-50; }
+        .btn-danger { @apply bg-error text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-red-600; }
+        .btn-success { @apply bg-success text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-green-600; }
+        .card { @apply bg-white rounded-xl shadow-soft border border-gray-100 p-6; }
+        .skeleton { @apply animate-pulse bg-gray-200 rounded; }
+        .hidden { display: none !important; }
+    </style>
 </head>
-<body class="font-sans bg-gray-100">
-    <div class="max-w-7xl mx-auto px-4 py-8">
-        <h1 class="text-2xl font-bold text-gray-900">Quản lý giao dịch</h1>
-        <p class="text-gray-500">Tính năng đang được phát triển...</p>
-        <div class="bg-white rounded-xl shadow p-8 mt-6">
-            <div class="text-center py-12">
-                <i class="ph ph-swap text-6xl text-gray-300"></i>
-                <p class="text-gray-500 mt-4">Trang này đang được phát triển...</p>
+
+<body class="font-sans antialiased">
+    <!-- Admin Navigation -->
+    <nav class="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-20 items-center">
+                <div class="flex items-center">
+                    <a th:href="@{/marketplace}" class="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                        <i class="ph-fill ph-shield-check text-primary text-3xl"></i>
+                        <span class="font-bold text-2xl tracking-tight text-gray-900">TrustBridge <span
+                                class="text-xs text-primary ml-1 uppercase bg-blue-100 px-2 py-1 rounded">Admin</span></span>
+                    </a>
+                    <div class="hidden md:flex ml-10 space-x-8">
+                        <a th:href="@{/admin/dashboard}"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Dashboard</a>
+                        <a th:href="@{/admin/users}"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Users</a>
+                        <a th:href="@{/admin/posts}"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Posts</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <div class="relative cursor-pointer hover:bg-gray-100 p-2 rounded-full transition-colors">
+                        <i class="ph-fill ph-bell text-xl text-gray-600"></i>
+                        <div class="absolute top-1 right-1 w-2.5 h-2.5 bg-error rounded-full border-2 border-white"></div>
+                    </div>
+                    <div class="relative" id="userMenuWrapper">
+                        <button id="userMenuBtn" onclick="toggleUserMenu()"
+                            class="flex items-center gap-3 cursor-pointer group focus:outline-none">
+                            <div class="w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center font-bold shadow-soft group-hover:scale-105 transition-transform">
+                                AD
+                            </div>
+                            <div class="hidden md:block group-hover:opacity-80 transition-opacity text-left">
+                                <div class="text-sm font-bold text-gray-900 leading-tight">System Admin</div>
+                                <div class="text-xs text-gray-500">Quản trị viên</div>
+                            </div>
+                            <i class="ph ph-caret-down text-gray-400 text-sm"></i>
+                        </button>
+                        <!-- Dropdown -->
+                        <div id="userMenu"
+                            class="hidden absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
+                            <a th:href="@{/admin/dashboard}"
+                                class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-bold">
+                                <i class="ph ph-squares-four"></i> Dashboard
+                            </a>
+                            <div class="border-t border-gray-100 my-1"></div>
+                            <form action="/logout" method="POST">
+                                <button type="submit"
+                                    class="w-full flex items-center gap-2 px-4 py-2 text-sm text-error hover:bg-red-50 font-bold text-left">
+                                    <i class="ph ph-sign-out"></i> Đăng xuất
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Dashboard Content -->
+    <div class="w-full py-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row gap-8">
+
+            <!-- Sidebar -->
+            <aside class="w-full md:w-64 flex-shrink-0">
+                <div class="bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden sticky top-28">
+                    <div class="p-6 border-b border-gray-100 text-center">
+                        <div class="relative inline-block">
+                            <div class="w-20 h-20 mx-auto rounded-full bg-gray-900 text-white flex items-center justify-center font-bold text-2xl mb-3 shadow-md">
+                                AD
+                            </div>
+                            <div class="absolute bottom-3 right-0 w-4 h-4 bg-success border-2 border-white rounded-full"></div>
+                        </div>
+                        <h2 class="font-bold text-lg text-gray-900">System Admin</h2>
+                        <div class="flex items-center justify-center gap-1 text-sm text-success mt-1">
+                            <i class="ph-fill ph-shield-check"></i> Full Access
+                        </div>
+                    </div>
+                    <nav class="p-4 space-y-1">
+                        <div class="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Hệ thống</div>
+                        <a th:href="@{/admin/dashboard}"
+                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-squares-four text-lg"></i> Tổng quan
+                        </a>
+                        <a th:href="@{/admin/users}"
+                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-users text-lg"></i> Quản lý người dùng
+                        </a>
+                        <a th:href="@{/admin/posts}"
+                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-list-checks text-lg"></i> Kiểm duyệt sản phẩm
+                        </a>
+                        <div class="mt-4 px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Tài chính</div>
+                        <a th:href="@{/admin/wallets}"
+                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-bank text-lg"></i> Quản lý ví
+                        </a>
+                        <a th:href="@{/admin/transactions}"
+                            class="flex items-center gap-3 px-4 py-3 bg-blue-50 text-primary font-bold rounded-lg transition-colors">
+                            <i class="ph-fill ph-swap text-lg"></i> Lịch sử giao dịch
+                        </a>
+                        <a th:href="@{/admin/disputes}"
+                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-gavel text-lg"></i> Khiếu nại
+                        </a>
+                    </nav>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="flex-1 space-y-6">
+                <!-- Header -->
+                <div class="flex justify-between items-center mb-2">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">Lịch sử giao dịch</h1>
+                        <p class="text-gray-500 text-sm mt-1">Xem và quản lý tất cả giao dịch trong hệ thống</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="AdminTransactions.refresh()" class="btn-outline flex items-center gap-2 bg-white">
+                            <i class="ph-bold ph-arrow-clockwise"></i> Làm mới
+                        </button>
+                        <button onclick="AdminTransactions.exportToCSV()" class="btn-primary flex items-center gap-2">
+                            <i class="ph-bold ph-download-simple"></i> Xuất CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Statistics Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div class="card flex flex-col justify-center hover-lift">
+                        <h3 class="text-gray-500 text-sm font-bold mb-1">Tổng giao dịch</h3>
+                        <div id="stat-total" class="text-2xl font-bold text-gray-900">0</div>
+                    </div>
+                    <div class="card flex flex-col justify-center hover-lift border-green-100 bg-green-50/30">
+                        <h3 class="text-gray-500 text-sm font-bold mb-1">Thành công</h3>
+                        <div id="stat-success" class="text-2xl font-bold text-success">0</div>
+                    </div>
+                    <div class="card flex flex-col justify-center hover-lift border-yellow-100 bg-yellow-50/30">
+                        <h3 class="text-gray-500 text-sm font-bold mb-1">Chờ xử lý</h3>
+                        <div id="stat-pending" class="text-2xl font-bold text-warning">0</div>
+                    </div>
+                    <div class="card flex flex-col justify-center hover-lift border-red-100 bg-red-50/30">
+                        <h3 class="text-gray-500 text-sm font-bold mb-1">Đóng băng</h3>
+                        <div id="stat-frozen" class="text-2xl font-bold text-error">0</div>
+                    </div>
+                    <div class="card flex flex-col justify-center hover-lift border-orange-100 bg-orange-50/30">
+                        <h3 class="text-gray-500 text-sm font-bold mb-1">Hoàn tiền</h3>
+                        <div id="stat-refunded" class="text-2xl font-bold text-orange-600">0</div>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="card">
+                    <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <i class="ph ph-funnel text-primary"></i> Bộ lọc
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Tìm kiếm</label>
+                            <div class="relative">
+                                <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                <input type="text" id="filter-keyword"
+                                    onkeydown="if(event.key==='Enter') AdminTransactions.applyFilters();"
+                                    placeholder="Mã đơn, người mua, người bán..."
+                                    class="w-full border border-gray-200 rounded-lg p-2 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Trạng thái</label>
+                            <select id="filter-status" onchange="AdminTransactions.applyFilters()"
+                                class="w-full border border-gray-200 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                                <option value="">Tất cả</option>
+                                <option value="PENDING">Chờ xử lý</option>
+                                <option value="AWAITING_PAYMENT">Chờ thanh toán</option>
+                                <option value="PAID">Đã thanh toán</option>
+                                <option value="PROCESSING">Đang xử lý</option>
+                                <option value="CREDENTIAL_ASSIGNED">Đã giao tài khoản</option>
+                                <option value="AWAITING_BUYER_CONFIRMATION">Chờ xác nhận</option>
+                                <option value="COMPLETED">Hoàn thành</option>
+                                <option value="CANCELLED">Đã hủy</option>
+                                <option value="REFUNDED">Hoàn tiền</option>
+                                <option value="DISPUTED">Khiếu nại</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Từ ngày</label>
+                            <input type="date" id="filter-from" onchange="AdminTransactions.applyFilters()"
+                                class="w-full border border-gray-200 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Đến ngày</label>
+                            <input type="date" id="filter-to" onchange="AdminTransactions.applyFilters()"
+                                class="w-full border border-gray-200 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                        </div>
+                        <div class="flex items-end gap-2">
+                            <button onclick="AdminTransactions.applyFilters()" class="btn-primary flex-1 flex items-center justify-center gap-2">
+                                <i class="ph ph-funnel"></i> Lọc
+                            </button>
+                            <button onclick="AdminTransactions.clearFilters()" class="btn-outline flex items-center justify-center gap-2">
+                                <i class="ph ph-x"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div id="table-loading" class="card text-center py-12">
+                    <i class="ph ph-spinner ph-spin text-4xl text-gray-400"></i>
+                    <p class="text-gray-500 mt-4">Đang tải dữ liệu giao dịch...</p>
+                </div>
+
+                <!-- Error State -->
+                <div id="table-error" class="card hidden">
+                    <div class="text-center py-12">
+                        <i class="ph ph-warning-circle text-4xl text-error"></i>
+                        <p id="error-message" class="text-gray-500 mt-4">Có lỗi xảy ra khi tải dữ liệu</p>
+                        <button onclick="AdminTransactions.refresh()" class="btn-primary inline-flex items-center gap-2 mt-4">
+                            <i class="ph ph-arrow-clockwise"></i> Thử lại
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Transactions Table -->
+                <div id="table-content" class="card hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="border-b border-gray-200">
+                                    <th class="text-left py-3 px-4 text-sm font-bold text-gray-500">Mã đơn</th>
+                                    <th class="text-left py-3 px-4 text-sm font-bold text-gray-500">Trạng thái</th>
+                                    <th class="text-left py-3 px-4 text-sm font-bold text-gray-500">Số tiền</th>
+                                    <th class="text-left py-3 px-4 text-sm font-bold text-gray-500">Người mua</th>
+                                    <th class="text-left py-3 px-4 text-sm font-bold text-gray-500">Người bán</th>
+                                    <th class="text-left py-3 px-4 text-sm font-bold text-gray-500">Ngày tạo</th>
+                                    <th class="text-left py-3 px-4 text-sm font-bold text-gray-500">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transactions-table-body">
+                                <!-- Transactions loaded dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div id="empty-state" class="hidden text-center py-12">
+                        <i class="ph ph-inbox text-4xl text-gray-300"></i>
+                        <p class="text-gray-500 mt-4">Không tìm thấy giao dịch nào</p>
+                    </div>
+
+                    <!-- Pagination -->
+                    <div id="pagination" class="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
+                        <div id="pagination-info" class="text-sm text-gray-500">
+                            Hiển thị 0-0 của 0 giao dịch
+                        </div>
+                        <div id="pagination-controls" class="flex items-center gap-2">
+                            <!-- Pagination buttons loaded dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
     </div>
+
+    <!-- Transaction Detail Modal -->
+    <div id="transaction-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                <h2 id="modal-title" class="text-xl font-bold text-gray-900">Chi tiết giao dịch</h2>
+                <button onclick="AdminTransactions.closeModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="ph ph-x text-2xl"></i>
+                </button>
+            </div>
+            <div id="modal-content" class="p-6">
+                <!-- Modal content loaded dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center text-sm text-gray-500 border-t border-gray-800 pt-8">
+            <div class="flex items-center gap-2 mb-4 md:mb-0">
+                <i class="ph-fill ph-shield-check text-primary text-2xl"></i>
+                <span class="font-bold text-lg tracking-tight text-gray-300">TrustBridge Market</span>
+            </div>
+            <p>&copy; 2026 TrustBridge Market. Protected by escrow transaction system.</p>
+        </div>
+    </footer>
+
+    <!-- User menu toggle -->
+    <script>
+        function toggleUserMenu() {
+            document.getElementById('userMenu').classList.toggle('hidden');
+        }
+        document.addEventListener('click', function (e) {
+            const wrapper = document.getElementById('userMenuWrapper');
+            if (wrapper && !wrapper.contains(e.target)) {
+                document.getElementById('userMenu').classList.add('hidden');
+            }
+        });
+    </script>
+
+    <!-- Admin Transactions Module -->
+    <script src="/js/admin-transactions.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            AdminTransactions.init();
+        });
+    </script>
 </body>
-</html>
-</body>
+
 </html>

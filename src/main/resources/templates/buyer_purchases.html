@@ -427,7 +427,7 @@
                 </button>
             </div>
 
-            <form id="disputeForm" method="POST" class="space-y-5 px-6 py-6">
+            <form id="disputeForm" method="POST" enctype="multipart/form-data" class="space-y-5 px-6 py-6">
                 <div>
                     <label for="disputeReason" class="block text-sm font-bold text-gray-900">Lý do khiếu nại</label>
                     <select id="disputeReason" name="reason" class="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-primary focus:outline-none" required>
@@ -444,10 +444,30 @@
                     <label for="disputeDescription" class="block text-sm font-bold text-gray-900">Mô tả vấn đề</label>
                     <textarea id="disputeDescription"
                               name="description"
-                              rows="5"
+                              rows="4"
                               class="mt-2 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-primary focus:outline-none"
                               placeholder="Mô tả rõ buyer đã kiểm tra gì, lỗi nhận được và vì sao cần mở dispute."
                               required></textarea>
+                </div>
+
+                <!-- Image Upload Section -->
+                <div>
+                    <label class="block text-sm font-bold text-gray-900">Bằng chứng hình ảnh (tùy chọn)</label>
+                    <p class="mt-1 text-xs text-gray-500">Tải lên tối đa 5 ảnh để làm bằng chứng (PNG, JPG, WEBP)</p>
+                    <div class="mt-2">
+                        <div id="imageUploadArea" class="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center hover:border-primary transition-colors cursor-pointer"
+                             onclick="document.getElementById('evidenceImages').click()">
+                            <input type="file" id="evidenceImages" name="evidenceImages" multiple accept="image/png,image/jpeg,image/webp" class="hidden" onchange="handleImageSelection(this)">
+                            <div id="uploadPlaceholder">
+                                <i class="ph ph-cloud-arrow-up text-3xl text-gray-400"></i>
+                                <p class="mt-2 text-sm text-gray-600">Kéo thả ảnh vào đây hoặc <span class="text-primary font-bold">chọn file</span></p>
+                            </div>
+                            <div id="imagePreviewContainer" class="hidden grid grid-cols-3 gap-3"></div>
+                        </div>
+                        <div id="imageCountInfo" class="mt-2 text-xs text-gray-500 hidden">
+                            <span id="imageCount">0</span>/5 ảnh đã chọn
+                        </div>
+                    </div>
                 </div>
 
                 <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -476,6 +496,118 @@
             <p>&copy; 2026 TrustBridge Market. Bảo vệ qua hệ thống giao dịch trung gian.</p>
         </div>
     </footer>
+
+    <!-- Image Upload Handler Script -->
+    <script>
+        // Store selected files globally
+        let selectedFiles = [];
+
+        function handleImageSelection(input) {
+            const maxFiles = 5;
+            const maxFileSize = 5 * 1024 * 1024; // 5MB
+            const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+
+            // Get newly selected files
+            const newFiles = Array.from(input.files);
+
+            // Validate and add files
+            for (let file of newFiles) {
+                if (selectedFiles.length >= maxFiles) {
+                    alert('Bạn chỉ có thể tải lên tối đa ' + maxFiles + ' ảnh.');
+                    break;
+                }
+
+                if (!allowedTypes.includes(file.type)) {
+                    alert('File "' + file.name + '" không được hỗ trợ. Chỉ chấp nhận PNG, JPG, WEBP.');
+                    continue;
+                }
+
+                if (file.size > maxFileSize) {
+                    alert('File "' + file.name + '" quá lớn. Kích thước tối đa là 5MB.');
+                    continue;
+                }
+
+                selectedFiles.push(file);
+            }
+
+            // Update preview
+            updateImagePreview();
+
+            // Clear input so same file can be selected again
+            input.value = '';
+        }
+
+        function updateImagePreview() {
+            const previewContainer = document.getElementById('imagePreviewContainer');
+            const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+            const imageCountInfo = document.getElementById('imageCountInfo');
+            const imageCount = document.getElementById('imageCount');
+
+            // Clear existing previews
+            previewContainer.innerHTML = '';
+
+            if (selectedFiles.length === 0) {
+                previewContainer.classList.add('hidden');
+                uploadPlaceholder.classList.remove('hidden');
+                imageCountInfo.classList.add('hidden');
+                return;
+            }
+
+            // Show preview container, hide placeholder
+            previewContainer.classList.remove('hidden');
+            uploadPlaceholder.classList.add('hidden');
+            imageCountInfo.classList.remove('hidden');
+            imageCount.textContent = selectedFiles.length;
+
+            // Create preview for each file
+            selectedFiles.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const previewWrapper = document.createElement('div');
+                    previewWrapper.className = 'relative group';
+
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    img.className = 'w-full h-24 object-cover rounded-lg border border-gray-200';
+
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.className = 'absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs font-bold hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity';
+                    removeBtn.innerHTML = '<i class="ph ph-x"></i>';
+                    removeBtn.onclick = function() {
+                        selectedFiles.splice(index, 1);
+                        updateImagePreview();
+                        updateFileInput();
+                    };
+
+                    previewWrapper.appendChild(img);
+                    previewWrapper.appendChild(removeBtn);
+                    previewContainer.appendChild(previewWrapper);
+                };
+                reader.readAsDataURL(file);
+            });
+
+            // Update the actual file input with selected files
+            updateFileInput();
+        }
+
+        function updateFileInput() {
+            const dataTransfer = new DataTransfer();
+            selectedFiles.forEach(file => dataTransfer.items.add(file));
+            document.getElementById('evidenceImages').files = dataTransfer.files;
+        }
+
+        // Form submission handler
+        document.addEventListener('DOMContentLoaded', function() {
+            const disputeForm = document.getElementById('disputeForm');
+            if (disputeForm) {
+                disputeForm.addEventListener('submit', function(e) {
+                    // Files are already set via updateFileInput()
+                    // Form will submit normally with multipart data
+                });
+            }
+        });
+    </script>
 
     <!-- Client-side Search and Filter Script -->
     <script>

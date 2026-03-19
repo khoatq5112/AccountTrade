@@ -23,8 +23,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     @Query("SELECT DISTINCT o FROM Order o " +
            "LEFT JOIN FETCH o.orderStatus os " +
+           "LEFT JOIN FETCH o.buyer " +
            "LEFT JOIN FETCH o.orderItems oi " +
            "LEFT JOIN FETCH oi.post p " +
+           "LEFT JOIN FETCH p.seller " +
            "WHERE o.orderId = :orderId")
     Optional<Order> findDetailedByOrderId(Long orderId);
 
@@ -55,4 +57,21 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     @Query("SELECT DISTINCT o FROM Order o JOIN o.orderItems oi WHERE oi.seller = :seller")
     Page<Order> findOrdersContainingSellerPosts(User seller, Pageable pageable);
+
+    /**
+     * Fetches orders with buyer, orderStatus, and all orderItems eagerly loaded.
+     * Used by admin transaction service for efficient paginated queries.
+     */
+    @Query(value = "SELECT DISTINCT o FROM Order o " +
+           "LEFT JOIN FETCH o.buyer " +
+           "LEFT JOIN FETCH o.orderStatus " +
+           "LEFT JOIN FETCH o.orderItems oi " +
+           "LEFT JOIN FETCH oi.seller",
+           countQuery = "SELECT COUNT(DISTINCT o) FROM Order o")
+    Page<Order> findAllForAdmin(Pageable pageable);
+
+    /**
+     * Count orders by order status name.
+     */
+    long countByOrderStatusStatusName(String statusName);
 }

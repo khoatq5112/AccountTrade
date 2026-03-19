@@ -273,7 +273,9 @@ public class AdminDashboardService {
                 dispute.getReason(),
                 dispute.getOpenedBy() != null ? dispute.getOpenedBy().getUsername() : "N/A",
                 dispute.getRespondent() != null ? dispute.getRespondent().getUsername() : "N/A",
-                dispute.getOpenedAt()
+                dispute.getOpenedAt(),
+                dispute.getDisputeStatus() != null ? dispute.getDisputeStatus().getStatusName() : "N/A",
+                dispute.getDisputeType()
         );
     }
 
@@ -298,5 +300,16 @@ public class AdminDashboardService {
                         user.getCreatedAt()
                 ))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Gets a user by username.
+     *
+     * @param username the username to search for
+     * @return the User if found, null otherwise
+     */
+    @Transactional(readOnly = true)
+    public User getUserByUsername(String username) {
+        return userRepository.findByUsername(username).orElse(null);
     }
 }

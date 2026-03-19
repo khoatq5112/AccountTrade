@@ -4,6 +4,7 @@ import com.group3.accounttrade.entity.Dispute;
 import com.group3.accounttrade.entity.Order;
 import com.group3.accounttrade.entity.RefundRequest;
 import com.group3.accounttrade.entity.User;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -68,4 +69,19 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, Lo
     List<RefundRequest> findByStatusIn(@Param("statuses") List<String> statuses);
 
     boolean existsByOrderAndStatusIn(Order order, List<String> statuses);
+
+    /**
+     * Override findById to load all related entities eagerly using EntityGraph.
+     * This handles null relationships gracefully unlike JOIN FETCH.
+     */
+    @Override
+    @EntityGraph(attributePaths = {
+        "dispute", 
+        "order", 
+        "order.buyer", 
+        "order.orderItems",
+        "order.orderItems.post",
+        "order.orderItems.seller"
+    })
+    Optional<RefundRequest> findById(Long id);
 }
