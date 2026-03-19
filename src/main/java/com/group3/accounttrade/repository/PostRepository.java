@@ -23,11 +23,15 @@ public interface PostRepository extends JpaRepository<Post, Integer> {
 
     Page<Post> findByCategoryAndStockStatus(Category category, StockStatus stockStatus, Pageable pageable);
 
-    @Query("SELECT p FROM Post p WHERE p.stockStatus = 'IN_STOCK' ORDER BY p.createdAt DESC")
+    @Query("SELECT p FROM Post p WHERE p.category = :category " +
+           "ORDER BY CASE WHEN p.stockStatus = 'IN_STOCK' THEN 0 ELSE 1 END, p.createdAt DESC")
+    Page<Post> findByCategoryOrderByAvailability(@Param("category") Category category, Pageable pageable);
+
+    @Query("SELECT p FROM Post p ORDER BY CASE WHEN p.stockStatus = 'IN_STOCK' THEN 0 ELSE 1 END, p.createdAt DESC")
     List<Post> findLatestAvailablePosts(Pageable pageable);
 
-    @Query("SELECT p FROM Post p WHERE p.stockStatus = 'IN_STOCK' " +
-           "AND (:categoryId IS NULL OR p.category.categoryId = :categoryId) " +
+    @Query("SELECT p FROM Post p WHERE " +
+           "(:categoryId IS NULL OR p.category.categoryId = :categoryId) " +
            "AND (:keyword IS NULL OR LOWER(p.title) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
            "AND (:minPrice IS NULL OR p.price >= :minPrice) " +
            "AND (:maxPrice IS NULL OR p.price <= :maxPrice)")
@@ -38,7 +42,7 @@ public interface PostRepository extends JpaRepository<Post, Integer> {
             @Param("maxPrice") Double maxPrice,
             Pageable pageable);
 
-    @Query("SELECT p FROM Post p WHERE p.stockStatus = 'IN_STOCK' AND LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%'))")
+    @Query("SELECT p FROM Post p WHERE LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%'))")
     List<Post> searchByTitle(@Param("query") String query);
 
     @Query("SELECT p FROM Post p WHERE p.seller.username = :username " +
@@ -60,7 +64,14 @@ public interface PostRepository extends JpaRepository<Post, Integer> {
 
     long countBySeller_UsernameAndStockStatus(String username, StockStatus stockStatus);
 
+    long countByStockStatus(StockStatus stockStatus);
+
     @Modifying
     @Query("UPDATE Post p SET p.stockStatus = :status WHERE p.postId = :postId")
     void updateStatus(@Param("postId") Integer postId, @Param("status") StockStatus status);
+
+    /**
+     * Find posts by stock status with pagination for admin approval workflow.
+     */
+    List<Post> findByStockStatus(StockStatus stockStatus, Pageable pageable);
 }

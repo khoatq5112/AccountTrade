@@ -27,6 +27,7 @@ public class PostService {
     private final CloudinaryService cloudinaryService;
     private final PostCredentialRepository postCredentialRepository;
     private final CredentialStatusRepository credentialStatusRepository;
+    private final CredentialAssignmentRepository credentialAssignmentRepository;
 
     /**
      * Creates a new post from the form data.
@@ -153,7 +154,9 @@ public class PostService {
      * @return list of all credentials for the post
      */
     public List<PostCredential> getCredentialsByPostId(Integer postId) {
-        return postCredentialRepository.findAllForManagementByPostId(postId);
+        List<PostCredential> credentials = postCredentialRepository.findAllForManagementByPostId(postId);
+        populateSoldOrderNumbers(credentials);
+        return credentials;
     }
 
     /**
@@ -168,19 +171,9 @@ public class PostService {
     @Transactional(readOnly = true)
     public Page<PostCredential> getCredentialsByPostIdWithFilters(
             Integer postId, String statusName, String keyword, Pageable pageable) {
-        return postCredentialRepository.findByPostIdWithFilters(postId, statusName, keyword, pageable);
-    }
-
-    /**
-     * Gets the credential that was sold to a specific transaction.
-     * Used by buyers to view their purchased credential.
-     *
-     * @param transactionId the transaction ID
-     * @return the credential if found
-     */
-    public PostCredential getCredentialByTransactionId(Integer transactionId) {
-        return postCredentialRepository.findBySoldToOrder_TransactionId(transactionId)
-                .orElse(null);
+        Page<PostCredential> page = postCredentialRepository.findByPostIdWithFilters(postId, statusName, keyword, pageable);
+        populateSoldOrderNumbers(page.getContent());
+        return page;
     }
 
     /**
@@ -406,39 +399,6 @@ public class PostService {
     }
 
     /**
-     * Assigns an available credential to a transaction.
-     * Called during checkout process.
-     *
-     * @param postId       the post ID
-     * @param transaction  the transaction to assign to
-     * @return the assigned credential
-     * @throws IllegalStateException if no available credentials
-     */
-    @Transactional
-    public PostCredential assignCredentialToTransaction(Integer postId, Transaction transaction) {
-        CredentialStatus availableStatus = credentialStatusRepository.findByStatusName(CredentialStatus.AVAILABLE)
-                .orElseThrow(() -> new IllegalStateException("Không tìm thấy trạng thái 'Available'"));
-        
-        CredentialStatus soldStatus = credentialStatusRepository.findByStatusName(CredentialStatus.SOLD)
-                .orElseThrow(() -> new IllegalStateException("Không tìm thấy trạng thái 'Sold'"));
-
-        // Find first available credential (FIFO)
-        PostCredential credential = postCredentialRepository
-                .findFirstByPost_PostIdAndCredentialStatusOrderByCreatedAtAsc(postId, availableStatus)
-                .orElseThrow(() -> new IllegalStateException("No available credentials for this post"));
-
-        // Mark as sold and link to transaction
-        credential.setCredentialStatus(soldStatus);
-        credential.setSoldToOrder(transaction);
-        postCredentialRepository.save(credential);
-
-        // Update stock status
-        updateStockStatus(postId);
-
-        return credential;
-    }
-
-    /**
      * Checks if a post has available credentials.
      *
      * @param postId the post ID
@@ -462,6 +422,19 @@ public class PostService {
                 .orElse(null);
         if (availableStatus == null) return 0;
         return postCredentialRepository.countByPost_PostIdAndCredentialStatus(postId, availableStatus);
+    }
+
+    private void populateSoldOrderNumbers(List<PostCredential> credentials) {
+        for (PostCredential credential : credentials) {
+            credential.setSoldOrderNumber(
+                    credentialAssignmentRepository.findByCredentialOrderByAssignedAtDesc(credential).stream()
+                            .map(assignment -> assignment.getOrderItem())
+                            .filter(orderItem -> orderItem != null && orderItem.getOrder() != null)
+                            .map(orderItem -> orderItem.getOrder().getOrderNumber())
+                            .findFirst()
+                            .orElse(null)
+            );
+        }
     }
 
     // ==================== Inner Classes ====================

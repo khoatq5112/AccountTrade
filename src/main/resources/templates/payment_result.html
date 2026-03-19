@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kết quả thanh toán | TrustBridge Market</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900" style="font-family: Manrope, sans-serif;">
+<main class="mx-auto max-w-3xl px-4 py-12">
+    <section class="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">TrustBridge Payment</p>
+        <h1 class="mt-3 text-3xl font-extrabold" th:text="${success} ? 'Mua hang thanh cong' : 'Thanh toan chua hoan tat'">Thanh toán</h1>
+        <p class="mt-4 text-slate-600" th:text="${message}">Thông báo trạng thái thanh toán.</p>
+
+        <div th:if="${orderSummary != null}" class="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-6">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-[0.16em] text-slate-400">Thong tin don hang</p>
+                    <h2 class="mt-2 text-2xl font-extrabold text-slate-900" th:text="${'Don hang #' + orderSummary.orderNumber}">Don hang</h2>
+                </div>
+                <span class="inline-flex items-center rounded-full bg-white px-3 py-1 text-sm font-semibold text-slate-700 border border-slate-200"
+                      th:text="${orderSummary.orderStatus}">AWAITING_BUYER_CONFIRMATION</span>
+            </div>
+
+            <dl class="mt-5 grid gap-4 sm:grid-cols-2">
+                <div class="rounded-2xl bg-white px-4 py-4 border border-slate-200">
+                    <dt class="text-sm text-slate-500">Tong thanh toan</dt>
+                    <dd class="mt-1 text-xl font-extrabold text-sky-700"
+                        th:text="${#numbers.formatDecimal(orderSummary.totalAmount, 0, 'COMMA', 0, 'POINT') + ' ' + (orderSummary.currency != null ? orderSummary.currency : 'VND')}">0 VND</dd>
+                </div>
+                <div class="rounded-2xl bg-white px-4 py-4 border border-slate-200">
+                    <dt class="text-sm text-slate-500">So san pham</dt>
+                    <dd class="mt-1 text-xl font-extrabold text-slate-900" th:text="${#lists.size(orderSummary.items)}">1</dd>
+                </div>
+            </dl>
+
+            <div class="mt-5 rounded-2xl bg-white border border-slate-200 overflow-hidden">
+                <div class="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">San pham da mua</div>
+                <div class="divide-y divide-slate-200">
+                    <div th:each="item : ${orderSummary.items}" class="px-4 py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p class="font-semibold text-slate-900" th:text="${item.productTitle}">Product</p>
+                            <p class="mt-1 text-xs text-slate-500" th:text="${'Trang thai item: ' + item.itemStatus}">Trang thai item</p>
+                        </div>
+                        <p class="text-sm font-bold text-slate-700"
+                           th:text="${#numbers.formatDecimal(item.unitPrice, 0, 'COMMA', 0, 'POINT') + ' VND'}">0 VND</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-5 grid gap-4">
+                <div class="rounded-2xl border border-sky-100 bg-sky-50 px-5 py-4">
+                    <p class="text-sm font-semibold uppercase tracking-[0.14em] text-sky-500">Next Steps</p>
+                    <p class="mt-2 text-sm leading-6 text-sky-900" th:text="${orderSummary.nextSteps}">Huong dan tiep theo.</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white px-5 py-4">
+                    <p class="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Support</p>
+                    <p class="mt-2 text-sm leading-6 text-slate-700" th:text="${orderSummary.supportMessage}">Thong tin ho tro.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+            <a th:if="${orderId != null}" th:href="@{/payment/status/{orderId}(orderId=${orderId})}"
+               class="rounded-2xl bg-sky-600 px-5 py-3 text-center font-bold text-white hover:bg-sky-700">
+                Xem trạng thái đơn hàng
+            </a>
+            <a href="/buyer/purchases" class="rounded-2xl border border-slate-200 px-5 py-3 text-center font-bold text-slate-700 hover:bg-slate-50">
+                Lịch sử mua hàng
+            </a>
+            <a href="/marketplace" class="rounded-2xl border border-slate-200 px-5 py-3 text-center font-bold text-slate-700 hover:bg-slate-50">
+                Quay lại marketplace
+            </a>
+        </div>
+    </section>
+</main>
+</body>
+</html>

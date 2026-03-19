@@ -1,18 +1,22 @@
 package com.group3.accounttrade.controller;
 
 import com.group3.accounttrade.dto.CredentialForm;
+import com.group3.accounttrade.dto.DisputeDetailDTO;
 import com.group3.accounttrade.dto.PostForm;
 import com.group3.accounttrade.entity.*;
 import com.group3.accounttrade.repository.CategoryRepository;
 import com.group3.accounttrade.repository.UserRepository;
 import com.group3.accounttrade.repository.WalletRepository;
+import com.group3.accounttrade.service.DisputeService;
 import com.group3.accounttrade.service.PostService;
 import com.group3.accounttrade.service.SellerDashboardService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -23,11 +27,13 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
  * Controller for seller-related operations.
  */
+@Slf4j
 @Controller
 @RequestMapping("/seller")
 @RequiredArgsConstructor
@@ -36,6 +42,7 @@ public class SellerController {
     private final CategoryRepository categoryRepository;
     private final PostService postService;
     private final SellerDashboardService sellerDashboardService;
+    private final DisputeService disputeService;
     private final UserRepository userRepository;
     private final WalletRepository walletRepository;
 
@@ -47,10 +54,6 @@ public class SellerController {
         SellerDashboardService.SellerDashboardStats stats = sellerDashboardService.getDashboardStats(username);
         model.addAttribute("stats", stats);
 
-        // Get pending orders requiring action
-        List<Transaction> pendingOrders = sellerDashboardService.getPendingOrders(username, 5);
-        model.addAttribute("pendingOrders", pendingOrders);
-
         // Get user info
         User user = userRepository.findByUsername(username).orElse(null);
         model.addAttribute("currentUser", user);
@@ -58,9 +61,50 @@ public class SellerController {
         // Get wallet
         Wallet wallet = walletRepository.findByUser_Username(username).orElse(null);
         model.addAttribute("wallet", wallet);
-        addSellerLayoutContext(model, user, "dashboard");
 
         return "seller_dashboard";
+    }
+
+    @GetMapping("/orders")
+    public String listSellerOrders(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt") String sort,
+            @RequestParam(defaultValue = "desc") String direction,
+            Authentication authentication,
+            Model model) {
+
+        String username = authentication.getName();
+        User user = userRepository.findByUsername(username).orElse(null);
+        Wallet wallet = walletRepository.findByUser_Username(username).orElse(null);
+
+        int pageSize = (size == 25 || size == 50) ? size : 10;
+        Sort.Direction sortDirection = "asc".equalsIgnoreCase(direction)
+                ? Sort.Direction.ASC
+                : Sort.Direction.DESC;
+        Pageable pageable = PageRequest.of(page, pageSize, Sort.by(sortDirection, resolveSellerOrderSort(sort)));
+
+        Page<SellerDashboardService.SellerOrderRow> ordersPage =
+                sellerDashboardService.getSellerOrders(username, keyword, status, pageable);
+
+        model.addAttribute("currentUser", user);
+        model.addAttribute("wallet", wallet);
+        model.addAttribute("ordersPage", ordersPage);
+        model.addAttribute("orderRows", ordersPage.getContent());
+        model.addAttribute("currentPage", page);
+        model.addAttribute("pageSize", pageSize);
+        model.addAttribute("totalPages", ordersPage.getTotalPages());
+        model.addAttribute("totalItems", ordersPage.getTotalElements());
+        model.addAttribute("fromItem", ordersPage.getTotalElements() > 0 ? (long) page * pageSize + 1 : 0);
+        model.addAttribute("toItem", Math.min((long) (page + 1) * pageSize, ordersPage.getTotalElements()));
+        model.addAttribute("keyword", keyword);
+        model.addAttribute("selectedStatus", status);
+        model.addAttribute("currentSort", sort);
+        model.addAttribute("currentDirection", direction);
+
+        return "seller_orders";
     }
 
     /**
@@ -141,7 +185,11 @@ public class SellerController {
             Model model) {
 
         String username = authentication.getName();
-        
+
+        // Get user info for sidebar
+        User user = userRepository.findByUsername(username).orElse(null);
+        model.addAttribute("currentUser", user);
+
         // Validate page size (only allow 10, 25, 50)
         int pageSize = (size == 25 || size == 50) ? size : 10;
         
@@ -190,7 +238,6 @@ public class SellerController {
 
         // Add categories for filter dropdowns
         model.addAttribute("categories", categoryRepository.findAllOrderByDisplayOrderAsc());
-        addSellerLayoutContext(model, userRepository.findByUsername(username).orElse(null), "posts");
 
         return "seller_posts";
     }
@@ -548,11 +595,139 @@ public class SellerController {
         model.addAttribute("categories", categoryRepository.findAllOrderByDisplayOrderAsc());
     }
 
-    private void addSellerLayoutContext(Model model, User user, String activeSellerNav) {
-        String sellerUsername = user != null ? user.getUsername() : null;
+    private String resolveSellerOrderSort(String sort) {
+        return switch (sort) {
+            case "orderNumber" -> "order.orderNumber";
+            case "product" -> "postTitleSnapshot";
+            case "buyer" -> "order.buyer.username";
+            case "amount" -> "unitPrice";
+            case "status" -> "order.orderStatus.statusName";
+            default -> "order.createdAt";
+        };
+    }
+
+    // ==================== Dispute Management Endpoints ====================
+
+    /**
+     * List all disputes for the current seller.
+     */
+    @GetMapping("/disputes")
+    public String listSellerDisputes(
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            Authentication authentication,
+            Model model) {
+        
+        String username = authentication.getName();
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) {
+            return "redirect:/login.html";
+        }
+
+        // Get wallet for sidebar
+        Wallet wallet = walletRepository.findByUser_Username(username).orElse(null);
         model.addAttribute("currentUser", user);
-        model.addAttribute("sellerUsername", sellerUsername);
-        model.addAttribute("sellerBadgeText", "Đã xác minh cấp 2");
-        model.addAttribute("activeSellerNav", activeSellerNav);
+        model.addAttribute("wallet", wallet);
+
+        // Get disputes with pagination
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Dispute> disputesPage = disputeService.getDisputesBySellerPaginated(user.getUserId(), status, pageable);
+
+        model.addAttribute("disputesPage", disputesPage);
+        model.addAttribute("disputes", disputesPage.getContent());
+        model.addAttribute("currentPage", page);
+        model.addAttribute("pageSize", size);
+        model.addAttribute("totalPages", disputesPage.getTotalPages());
+        model.addAttribute("totalItems", disputesPage.getTotalElements());
+        model.addAttribute("selectedStatus", status);
+
+        return "seller_disputes";
+    }
+
+    /**
+     * View dispute detail.
+     */
+    @GetMapping("/disputes/{disputeId}")
+    public String viewDisputeDetail(@PathVariable Long disputeId,
+                                        Authentication authentication,
+                                        Model model,
+                                        RedirectAttributes redirectAttributes) {
+        String username = authentication.getName();
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) {
+            return "redirect:/login.html";
+        }
+
+        // Get dispute detail
+        DisputeDetailDTO dispute = disputeService.getDisputeDetailDTO(disputeId);
+        if (dispute == null) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Không tìm thấy khiếu nại.");
+            return "redirect:/seller/disputes";
+        }
+
+        // Verify user is the seller (respondent)
+        if (!dispute.seller().userId().equals(user.getUserId())) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Bạn không có quyền xem khiếu nại này.");
+            return "redirect:/seller/disputes";
+        }
+
+        // Get wallet for sidebar
+        Wallet wallet = walletRepository.findByUser_Username(username).orElse(null);
+        model.addAttribute("currentUser", user);
+        model.addAttribute("wallet", wallet);
+        model.addAttribute("dispute", dispute);
+
+        return "seller_dispute_detail";
+    }
+
+    /**
+     * Submit seller response to a dispute.
+     */
+    @PostMapping("/disputes/{disputeId}/response")
+    public String submitDisputeResponse(@PathVariable Long disputeId,
+                                         @RequestParam String response,
+                                         @RequestParam(required = false) String evidence,
+                                         Authentication authentication,
+                                         RedirectAttributes redirectAttributes) {
+        String username = authentication.getName();
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) {
+            return "redirect:/login.html";
+        }
+
+        try {
+            disputeService.submitSellerResponse(disputeId, user.getUserId(), response, evidence);
+            redirectAttributes.addFlashAttribute("successMessage", "Phản hồi đã được gửi thành công.");
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+        }
+
+        return "redirect:/seller/disputes/" + disputeId;
+    }
+
+    /**
+     * Add message to dispute.
+     */
+    @PostMapping("/disputes/{disputeId}/messages")
+    public String addDisputeMessage(@PathVariable Long disputeId,
+                                      @RequestParam String message,
+                                      @RequestParam(required = false) String attachmentUrl,
+                                      Authentication authentication,
+                                      RedirectAttributes redirectAttributes) {
+        String username = authentication.getName();
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) {
+            return "redirect:/login.html";
+        }
+
+        try {
+            disputeService.addMessage(disputeId, user.getUserId(), message, attachmentUrl);
+            redirectAttributes.addFlashAttribute("successMessage", "Tin nhắn đã được gửi.");
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+        }
+
+        return "redirect:/seller/disputes/" + disputeId;
     }
 }

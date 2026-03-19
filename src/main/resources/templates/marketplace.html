@@ -329,10 +329,17 @@
                     <th:block th:each="post : ${posts}">
                         <div class="bg-white rounded-xl shadow-card hover-lift border border-gray-100 overflow-hidden">
                             <div class="h-44 bg-gradient-to-br from-blue-50 to-blue-100 relative overflow-hidden">
-                                <img th:src="${post.resolvedThumbnailUrl}" class="w-full h-full object-cover" th:alt="${post.title}">
+                                <img th:src="${post.resolvedThumbnailUrl}" class="w-full h-full object-contain" th:alt="${post.title}">
                                 <div class="absolute top-3 left-3 bg-white/90 backdrop-blur text-gray-900 text-xs font-bold px-2 py-1 rounded" th:text="${post.category != null ? post.category.categoryName : 'Uncategorized'}">Category</div>
-                                <div class="absolute top-3 right-3 bg-success text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
-                                    <i class="ph-bold ph-shield-check"></i> Trung gian
+                                <div class="absolute top-3 right-3 flex flex-col items-end gap-2">
+                                    <div class="bg-success text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
+                                        <i class="ph-bold ph-shield-check"></i> Trung gian
+                                    </div>
+                                    <div class="text-xs font-bold px-2 py-1 rounded flex items-center gap-1"
+                                         th:classappend="${post.inStock} ? ' bg-green-50 text-success' : ' bg-amber-50 text-warning'">
+                                        <i th:class="${post.inStock} ? 'ph-fill ph-check-circle' : 'ph-fill ph-warning-circle'"></i>
+                                        <span th:text="${post.inStock} ? 'Còn hàng' : 'Hết hàng'">Còn hàng</span>
+                                    </div>
                                 </div>
                             </div>
                             <div class="p-4">
@@ -358,14 +365,22 @@
                                             Xem
                                         </a>
                                         <!-- Add to Cart Button -->
-                                        <button th:if="${canPurchase}" th:onclick="'addToCart(' + ${post.postId} + ')'"
+                                        <button th:if="${canPurchase and post.inStock}" th:onclick="'addToCart(' + ${post.postId} + ')'"
                                             class="bg-gray-100 text-gray-700 text-sm font-semibold px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-1">
                                             <i class="ph-fill ph-shopping-cart"></i>
                                         </button>
+                                        <button th:if="${canPurchase and !post.inStock}" type="button" disabled
+                                            class="cursor-not-allowed bg-gray-100 text-gray-400 text-sm font-semibold px-3 py-2 rounded-lg flex items-center gap-1">
+                                            <i class="ph-fill ph-shopping-cart"></i>
+                                        </button>
                                         <!-- Buy Now Button -->
-                                        <button th:if="${canPurchase}" th:onclick="'buyNow(' + ${post.postId} + ')'"
+                                        <button th:if="${canPurchase and post.inStock}" th:onclick="'buyNow(' + ${post.postId} + ')'"
                                             class="bg-primary text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors">
                                             Mua ngay
+                                        </button>
+                                        <button th:if="${canPurchase and !post.inStock}" type="button" disabled
+                                            class="cursor-not-allowed bg-gray-100 text-gray-400 text-sm font-semibold px-4 py-2 rounded-lg">
+                                            Hết hàng
                                         </button>
                                     </div>
                                 </div>
@@ -649,14 +664,15 @@
                     'Content-Type': 'application/json'
                 }
             })
-            .then(response => {
+            .then(async response => {
+                const data = await response.json().catch(() => ({}));
                 if (response.ok) {
                     showToast('Đã thêm vào giỏ hàng!');
                     refreshCartCount();
                 } else if (response.status === 401) {
                     window.location.href = '/login.html?redirect=/marketplace';
                 } else {
-                    showToast('Có lỗi xảy ra!', 'error');
+                    showToast(data.message || 'Có lỗi xảy ra!', 'error');
                 }
             })
             .catch(err => {

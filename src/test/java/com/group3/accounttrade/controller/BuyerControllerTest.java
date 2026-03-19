@@ -2,12 +2,14 @@ package com.group3.accounttrade.controller;
 
 import com.group3.accounttrade.entity.Post;
 import com.group3.accounttrade.entity.StockStatus;
-import com.group3.accounttrade.entity.Transaction;
 import com.group3.accounttrade.entity.User;
+import com.group3.accounttrade.repository.OrderRepository;
 import com.group3.accounttrade.repository.PostRepository;
 import com.group3.accounttrade.repository.UserRepository;
-import com.group3.accounttrade.service.BuyerTransactionService;
+import com.group3.accounttrade.repository.WalletRepository;
+import com.group3.accounttrade.service.BuyerOrderService;
 import com.group3.accounttrade.service.CartService;
+import com.group3.accounttrade.service.OrderCheckoutService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,10 +45,19 @@ class BuyerControllerTest {
     private UserRepository userRepository;
 
     @Mock
+    private OrderRepository orderRepository;
+
+    @Mock
+    private WalletRepository walletRepository;
+
+    @Mock
     private CartService cartService;
 
     @Mock
-    private BuyerTransactionService buyerTransactionService;
+    private BuyerOrderService buyerOrderService;
+
+    @Mock
+    private OrderCheckoutService orderCheckoutService;
 
     @InjectMocks
     private BuyerController buyerController;
@@ -92,19 +103,22 @@ class BuyerControllerTest {
     }
 
     @Test
-    void checkoutPostRedirectsToPurchasesAfterSuccess() throws Exception {
+    void checkoutPostRedirectsToVnpayAfterSuccess() throws Exception {
         MockMvc mockMvc = MockMvcBuilders.standaloneSetup(buyerController).build();
         User buyer = User.builder().userId(1).username("buyer").build();
-        Transaction transaction = Transaction.builder().transactionId(77).build();
+        OrderCheckoutService.CheckoutSession checkoutSession = OrderCheckoutService.CheckoutSession.builder()
+                .paymentUrl("https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_TxnRef=abc")
+                .build();
 
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("buyer", "pw", List.of()));
         when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
-        when(buyerTransactionService.checkoutPost(buyer, 9)).thenReturn(transaction);
+        when(orderCheckoutService.initiateCheckout(org.mockito.ArgumentMatchers.eq(buyer), org.mockito.ArgumentMatchers.eq(9), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(checkoutSession);
 
         mockMvc.perform(post("/buyer/checkout").param("postId", "9"))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/buyer/purchases?transactionId=77"))
+                .andExpect(redirectedUrl("https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_TxnRef=abc"))
                 .andExpect(flash().attributeExists("successMessage"));
     }
 }

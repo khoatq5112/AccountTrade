@@ -27,7 +27,6 @@ public interface PostCredentialRepository extends JpaRepository<PostCredential, 
             select pc
             from PostCredential pc
             join fetch pc.credentialStatus cs
-            left join fetch pc.soldToOrder sto
             where pc.post.postId = :postId
             order by pc.createdAt desc
             """)
@@ -46,7 +45,6 @@ public interface PostCredentialRepository extends JpaRepository<PostCredential, 
             select pc
             from PostCredential pc
             join fetch pc.credentialStatus cs
-            left join fetch pc.soldToOrder sto
             where pc.post.postId = :postId
             and (:statusName is null or cs.statusName = :statusName)
             and (:keyword is null or lower(pc.accountUsername) like lower(concat('%', :keyword, '%')))
@@ -103,14 +101,6 @@ public interface PostCredentialRepository extends JpaRepository<PostCredential, 
             Integer postId, 
             CredentialStatus credentialStatus
     );
-
-    /**
-     * Find the credential that was sold to a specific transaction/order.
-     *
-     * @param transactionId the transaction ID
-     * @return Optional containing the credential if found
-     */
-    Optional<PostCredential> findBySoldToOrder_TransactionId(Integer transactionId);
 
     /**
      * Check if any credentials exist for a post with the given status.

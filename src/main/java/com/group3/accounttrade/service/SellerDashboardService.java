@@ -1,13 +1,21 @@
 package com.group3.accounttrade.service;
 
 import com.group3.accounttrade.entity.*;
-import com.group3.accounttrade.repository.*;
+import com.group3.accounttrade.repository.EscrowRepository;
+import com.group3.accounttrade.repository.OrderItemRepository;
+import com.group3.accounttrade.repository.OrderRepository;
+import com.group3.accounttrade.repository.PostRepository;
+import com.group3.accounttrade.repository.UserRepository;
+import com.group3.accounttrade.repository.WalletRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
@@ -17,11 +25,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SellerDashboardService {
 
-    private final TransactionRepository transactionRepository;
+    private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final EscrowRepository escrowRepository;
     private final PostRepository postRepository;
     private final WalletRepository walletRepository;
     private final UserRepository userRepository;
-    private final TransactionStatusRepository transactionStatusRepository;
 
     /**
      * Gets dashboard statistics for a seller.
@@ -41,27 +50,31 @@ public class SellerDashboardService {
         long totalPosts = postRepository.countBySeller_Username(username);
         long activePosts = postRepository.countBySeller_UsernameAndStockStatus(username, StockStatus.IN_STOCK);
 
-        // Get transaction stats
-        TransactionStatus pendingStatus = transactionStatusRepository.findByStatusName("PENDING").orElse(null);
-        TransactionStatus escrowStatus = transactionStatusRepository.findByStatusName("ESCROW").orElse(null);
-        TransactionStatus completedStatus = transactionStatusRepository.findByStatusName("COMPLETED").orElse(null);
+        List<Order> sellerOrders = orderRepository.findOrdersContainingSellerPosts(seller);
+        long completedOrders = sellerOrders.stream()
+                .filter(order -> hasStatus(order, OrderStatus.COMPLETED))
+                .count();
 
-        long pendingOrders = pendingStatus != null ?
-                transactionRepository.countBySellerAndStatus(seller, pendingStatus) : 0;
-        long escrowOrders = escrowStatus != null ?
-                transactionRepository.countBySellerAndStatus(seller, escrowStatus) : 0;
-        long completedOrders = completedStatus != null ?
-                transactionRepository.countBySellerAndStatus(seller, completedStatus) : 0;
+        long escrowOrders = escrowRepository.countBySellerAndStatus(seller, EscrowStatus.HOLDING)
+                + escrowRepository.countBySellerAndStatus(seller, EscrowStatus.FROZEN);
 
-        BigDecimal totalRevenue = transactionRepository.sumRevenueBySellerAndStatusName(seller, "COMPLETED");
-        BigDecimal escrowAmount = transactionRepository.sumRevenueBySellerAndStatusName(seller, "ESCROW");
+        BigDecimal totalRevenue = sellerOrders.stream()
+                .filter(order -> hasStatus(order, OrderStatus.COMPLETED))
+                .flatMap(order -> order.getOrderItems().stream())
+                .filter(item -> item.getSeller() != null && seller.getUserId().equals(item.getSeller().getUserId()))
+                .map(item -> item.getSellerEarnings() != null ? item.getSellerEarnings() : item.getUnitPrice())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal escrowAmount = escrowRepository.sumAmountBySellerAndStatus(seller, EscrowStatus.HOLDING);
+        BigDecimal frozenEscrowAmount = escrowRepository.sumAmountBySellerAndStatus(seller, EscrowStatus.FROZEN);
+        escrowAmount = (escrowAmount != null ? escrowAmount : BigDecimal.ZERO)
+                .add(frozenEscrowAmount != null ? frozenEscrowAmount : BigDecimal.ZERO);
 
         return new SellerDashboardStats(
                 wallet != null ? wallet.getBalance() : BigDecimal.ZERO,
                 wallet != null ? wallet.getFrozenBalance() : BigDecimal.ZERO,
                 totalPosts,
                 activePosts,
-                pendingOrders,
                 escrowOrders,
                 completedOrders,
                 totalRevenue != null ? totalRevenue : BigDecimal.ZERO,
@@ -69,41 +82,39 @@ public class SellerDashboardService {
         );
     }
 
-    /**
-     * Gets pending orders for a seller (orders requiring action).
-     *
-     * @param username the seller's username
-     * @param limit    maximum number of orders to return
-     * @return list of pending transactions
-     */
     @Transactional(readOnly = true)
-    public List<Transaction> getPendingOrders(String username, int limit) {
+    public Page<SellerOrderRow> getSellerOrders(String username, String keyword, String status, Pageable pageable) {
         User seller = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        TransactionStatus pendingStatus = transactionStatusRepository.findByStatusName("PENDING")
-                .orElse(null);
-        TransactionStatus escrowStatus = transactionStatusRepository.findByStatusName("ESCROW")
-                .orElse(null);
+        String normalizedKeyword = keyword != null ? keyword.trim() : null;
+        String normalizedStatus = status != null && !status.isBlank() ? status.trim() : null;
 
-        // Build list of statuses, filtering out nulls
-        java.util.ArrayList<TransactionStatus> statuses = new java.util.ArrayList<>();
-        if (pendingStatus != null) {
-            statuses.add(pendingStatus);
-        }
-        if (escrowStatus != null) {
-            statuses.add(escrowStatus);
-        }
+        return orderItemRepository.findSellerOrderItems(seller, normalizedKeyword, normalizedStatus, pageable)
+                .map(this::toSellerOrderRow);
+    }
 
-        if (statuses.isEmpty()) {
-            return List.of();
-        }
+    private boolean hasStatus(Order order, String statusName) {
+        return order.getOrderStatus() != null
+                && statusName.equalsIgnoreCase(order.getOrderStatus().getStatusName());
+    }
 
-        // Get orders that are pending or in escrow (requiring seller action)
-        List<Transaction> orders = transactionRepository.findBySellerAndStatusInOrderByCreatedAtDesc(
-                seller, statuses, PageRequest.of(0, limit));
+    private SellerOrderRow toSellerOrderRow(OrderItem orderItem) {
+        Order order = orderItem.getOrder();
 
-        return orders;
+        return new SellerOrderRow(
+                order.getOrderId(),
+                order.getOrderNumber(),
+                orderItem.getPost() != null ? orderItem.getPost().getPostId() : null,
+                orderItem.getPostTitleSnapshot(),
+                order.getBuyer() != null ? order.getBuyer().getUsername() : "Unknown buyer",
+                orderItem.getUnitPrice(),
+                orderItem.getSellerEarnings(),
+                order.getOrderStatus() != null ? order.getOrderStatus().getStatusName() : OrderStatus.PENDING,
+                orderItem.getItemStatus(),
+                order.getCreatedAt(),
+                order.getConfirmationDeadline()
+        );
     }
 
     /**
@@ -114,7 +125,6 @@ public class SellerDashboardService {
             BigDecimal frozenBalance,
             long totalPosts,
             long activePosts,
-            long pendingOrders,
             long escrowOrders,
             long completedOrders,
             BigDecimal totalRevenue,
@@ -136,13 +146,52 @@ public class SellerDashboardService {
             return formatCurrency(escrowAmount);
         }
 
-        public long getTotalOrdersRequiringAction() {
-            return pendingOrders + escrowOrders;
-        }
-
         private String formatCurrency(BigDecimal amount) {
             if (amount == null) return "0₫";
             return String.format("%,.0f₫", amount);
+        }
+    }
+
+    public record SellerOrderRow(
+            Long orderId,
+            String orderNumber,
+            Integer postId,
+            String productTitle,
+            String buyerUsername,
+            BigDecimal saleAmount,
+            BigDecimal sellerEarnings,
+            String orderStatus,
+            String itemStatus,
+            LocalDateTime createdAt,
+            LocalDateTime confirmationDeadline
+    ) {
+        private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
+        public String getFormattedSaleAmount() {
+            BigDecimal amount = saleAmount != null ? saleAmount : BigDecimal.ZERO;
+            return String.format("%,.0f ₫", amount);
+        }
+
+        public String getFormattedSellerEarnings() {
+            BigDecimal amount = sellerEarnings != null ? sellerEarnings : saleAmount;
+            amount = amount != null ? amount : BigDecimal.ZERO;
+            return String.format("%,.0f ₫", amount);
+        }
+
+        public String getFormattedCreatedAt() {
+            return createdAt != null ? createdAt.format(DATE_TIME_FORMATTER) : "-";
+        }
+
+        public String getFormattedConfirmationDeadline() {
+            return confirmationDeadline != null ? confirmationDeadline.format(DATE_TIME_FORMATTER) : null;
+        }
+
+        public boolean isDisputed() {
+            return OrderStatus.DISPUTED.equalsIgnoreCase(orderStatus);
+        }
+
+        public boolean isAwaitingBuyerConfirmation() {
+            return OrderStatus.AWAITING_BUYER_CONFIRMATION.equalsIgnoreCase(orderStatus);
         }
     }
 }

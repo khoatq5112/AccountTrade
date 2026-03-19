@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="https://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrustBridge Market | Quản lý đơn hàng</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#137fec',
+                        surface: '#f5f7fa',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        error: '#ef4444'
+                    },
+                    fontFamily: {
+                        sans: ['Manrope', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px rgba(0, 0, 0, 0.05)',
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style type="text/tailwindcss">
+        body { background-color: #f5f7fa; color: #1a1a1a; }
+        .btn-primary { @apply bg-primary text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-blue-600; }
+        .btn-outline { @apply border border-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-gray-50; }
+        .card { @apply bg-white rounded-xl shadow-soft border border-gray-100 p-6; }
+    </style>
+</head>
+
+<body class="font-sans antialiased">
+    <nav class="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-20 items-center">
+                <div class="flex items-center">
+                    <a th:href="@{/}" class="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                        <i class="ph-fill ph-shield-check text-primary text-3xl"></i>
+                        <span class="font-bold text-2xl tracking-tight text-gray-900">TrustBridge</span>
+                    </a>
+                    <div class="hidden md:flex ml-10 space-x-8">
+                        <a th:href="@{/marketplace}"
+                           class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Chợ trung gian</a>
+                        <a th:href="@{/seller/dashboard}"
+                           class="text-primary font-bold px-3 py-2 transition-colors border-b-2 border-primary">Dashboard Kênh Bán</a>
+                        <a th:href="@{/support}"
+                           class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Hỗ trợ</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <div class="flex items-center gap-2 text-sm font-bold bg-blue-50 text-primary py-1.5 px-3 rounded-full border border-blue-100 shadow-sm">
+                        <i class="ph-fill ph-wallet"></i>
+                        <span th:text="${wallet != null ? #numbers.formatDecimal(wallet.balance, 1, 'DEFAULT', 0, 'DEFAULT') + ' ₫' : '0 ₫'}">0 ₫</span>
+                    </div>
+                    <div class="relative" id="userMenuWrapper">
+                        <button id="userMenuBtn" onclick="toggleUserMenu()"
+                                class="flex items-center gap-3 cursor-pointer group focus:outline-none">
+                            <div class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold shadow-soft group-hover:scale-105 transition-transform">
+                                <span th:text="${#strings.toUpperCase(currentUser.username.substring(0, 2))}">SE</span>
+                            </div>
+                            <div class="hidden md:block group-hover:opacity-80 transition-opacity text-left">
+                                <div class="text-sm font-bold text-gray-900 leading-tight" th:text="${currentUser.username}">seller</div>
+                                <div class="text-xs text-gray-500">Người bán uy tín</div>
+                            </div>
+                            <i class="ph ph-caret-down text-gray-400 text-sm"></i>
+                        </button>
+                        <div id="userMenu"
+                             class="hidden absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
+                            <a th:href="@{/seller/dashboard}"
+                               class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-bold">
+                                <i class="ph ph-squares-four"></i> Dashboard
+                            </a>
+                            <div class="border-t border-gray-100 my-1"></div>
+                            <form action="/logout" method="POST">
+                                <button type="submit"
+                                        class="w-full flex items-center gap-2 px-4 py-2 text-sm text-error hover:bg-red-50 font-bold text-left">
+                                    <i class="ph ph-sign-out"></i> Đăng xuất
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="flex flex-col md:flex-row gap-8">
+            <aside class="w-full md:w-64 flex-shrink-0">
+                <div class="bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden sticky top-28">
+                    <div class="p-6 border-b border-gray-100 text-center">
+                        <div class="relative inline-block">
+                            <div class="w-20 h-20 mx-auto rounded-full bg-primary text-white flex items-center justify-center font-bold text-2xl mb-3 shadow-md">
+                                <span th:text="${#strings.toUpperCase(currentUser.username.substring(0, 3))}">SEL</span>
+                            </div>
+                            <div class="absolute bottom-3 right-0 w-4 h-4 bg-success border-2 border-white rounded-full"></div>
+                        </div>
+                        <h2 class="font-bold text-lg text-gray-900" th:text="${currentUser.username}">seller</h2>
+                        <div class="flex items-center justify-center gap-1 text-sm text-success mt-1">
+                            <i class="ph-fill ph-check-circle"></i> Đã xác minh cấp 2
+                        </div>
+                    </div>
+                    <nav class="p-4 space-y-1">
+                        <a th:href="@{/seller/dashboard}"
+                           class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-squares-four text-lg"></i> Tổng quan
+                        </a>
+                        <a th:href="@{/seller/posts}"
+                           class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-package text-lg"></i> Quản lý bài đăng
+                        </a>
+                        <a th:href="@{/seller/posts/new}"
+                           class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-plus-circle text-lg"></i> Đăng bài mới
+                        </a>
+                        <a th:href="@{/seller/orders}"
+                           class="flex items-center gap-3 px-4 py-3 bg-blue-50 text-primary font-bold rounded-lg transition-colors">
+                            <i class="ph-fill ph-shopping-bag text-lg"></i> Quản lý đơn hàng
+                        </a>
+                        <a th:href="@{/wallet}"
+                           class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-wallet text-lg"></i> Doanh thu & Rút tiền
+                        </a>
+                        <a href="#"
+                           class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-gear text-lg"></i> Cài đặt gian hàng
+                        </a>
+                        <a href="#"
+                           class="flex items-center gap-3 px-4 py-3 text-error hover:bg-red-50 font-bold rounded-lg transition-colors mt-6 border border-transparent hover:border-red-100">
+                            <i class="ph ph-warning-circle text-lg"></i> Trung tâm khiếu nại
+                        </a>
+                    </nav>
+                </div>
+            </aside>
+
+            <main class="flex-1 space-y-6">
+                <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+                    <div>
+                        <p class="text-sm font-bold uppercase tracking-[0.2em] text-primary">Quản lý đơn hàng</p>
+                        <h1 class="text-3xl font-bold text-gray-900 mt-1">Theo dõi mọi đơn buyer đã tạo cho bạn</h1>
+                        <p class="mt-2 text-gray-500">Danh sách này lấy trực tiếp từ seller được lưu trên từng order item, nên không bỏ sót đơn hợp lệ của gian hàng.</p>
+                    </div>
+                    <a th:href="@{/seller/dashboard}" class="btn-outline inline-flex items-center gap-2">
+                        <i class="ph ph-arrow-left"></i> Quay lại tổng quan
+                    </a>
+                </div>
+
+                <div class="card">
+                    <form th:action="@{/seller/orders}" method="GET" class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px_160px_auto]">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-600 mb-1">Tìm kiếm</label>
+                            <div class="relative">
+                                <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                <input type="text" name="keyword" th:value="${keyword}"
+                                       placeholder="Mã đơn, buyer, sản phẩm"
+                                       class="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-600 mb-1">Trạng thái</label>
+                            <select name="status" class="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <option value="">Tất cả</option>
+                                <option value="AWAITING_PAYMENT" th:selected="${selectedStatus == 'AWAITING_PAYMENT'}">Chờ thanh toán</option>
+                                <option value="PAID" th:selected="${selectedStatus == 'PAID'}">Đã thanh toán</option>
+                                <option value="PROCESSING" th:selected="${selectedStatus == 'PROCESSING'}">Đang xử lý</option>
+                                <option value="CREDENTIAL_ASSIGNED" th:selected="${selectedStatus == 'CREDENTIAL_ASSIGNED'}">Đã gán credential</option>
+                                <option value="AWAITING_BUYER_CONFIRMATION" th:selected="${selectedStatus == 'AWAITING_BUYER_CONFIRMATION'}">Chờ buyer xác nhận</option>
+                                <option value="DISPUTED" th:selected="${selectedStatus == 'DISPUTED'}">Tranh chấp</option>
+                                <option value="COMPLETED" th:selected="${selectedStatus == 'COMPLETED'}">Hoàn tất</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-600 mb-1">Hiển thị</label>
+                            <select name="size" class="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <option value="10" th:selected="${pageSize == 10}">10 dòng</option>
+                                <option value="25" th:selected="${pageSize == 25}">25 dòng</option>
+                                <option value="50" th:selected="${pageSize == 50}">50 dòng</option>
+                            </select>
+                        </div>
+                        <div class="flex items-end gap-2">
+                            <input type="hidden" name="sort" th:value="${currentSort}">
+                            <input type="hidden" name="direction" th:value="${currentDirection}">
+                            <button type="submit" class="btn-primary inline-flex items-center gap-2">
+                                <i class="ph ph-funnel"></i> Lọc
+                            </button>
+                            <a th:href="@{/seller/orders}" class="btn-outline inline-flex items-center gap-2">
+                                <i class="ph ph-arrow-counter-clockwise"></i> Đặt lại
+                            </a>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="card overflow-hidden">
+                    <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
+                        <div>
+                            <h2 class="text-xl font-bold text-gray-900">Bảng đơn hàng</h2>
+                            <p class="text-sm text-gray-500 mt-1">
+                                Hiển thị
+                                <span class="font-bold text-gray-700" th:text="${fromItem}">0</span>
+                                -
+                                <span class="font-bold text-gray-700" th:text="${toItem}">0</span>
+                                trên
+                                <span class="font-bold text-gray-700" th:text="${totalItems}">0</span>
+                                đơn hàng
+                            </p>
+                        </div>
+                    </div>
+
+                    <div th:if="${#lists.isEmpty(orderRows)}" class="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-6 py-14 text-center">
+                        <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-soft">
+                            <i class="ph ph-shopping-bag-open text-3xl text-gray-400"></i>
+                        </div>
+                        <h3 class="mt-4 text-lg font-bold text-gray-900">Chưa có đơn hàng phù hợp</h3>
+                        <p class="mt-2 text-sm text-gray-500">Khi buyer checkout sản phẩm của bạn, đơn hàng sẽ xuất hiện ở đây.</p>
+                    </div>
+
+                    <div th:if="${not #lists.isEmpty(orderRows)}" class="overflow-x-auto">
+                        <table class="min-w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-gray-100 text-xs uppercase tracking-[0.18em] text-gray-500">
+                                    <th class="py-3 pr-6 font-bold">
+                                        <a th:href="@{/seller/orders(keyword=${keyword},status=${selectedStatus},page=0,size=${pageSize},sort='orderNumber',direction=${currentSort == 'orderNumber' and currentDirection == 'asc' ? 'desc' : 'asc'})}"
+                                           class="inline-flex items-center gap-1 hover:text-primary">
+                                            Mã đơn
+                                            <i th:if="${currentSort == 'orderNumber' and currentDirection == 'asc'}" class="ph ph-caret-up"></i>
+                                            <i th:if="${currentSort == 'orderNumber' and currentDirection == 'desc'}" class="ph ph-caret-down"></i>
+                                        </a>
+                                    </th>
+                                    <th class="py-3 pr-6 font-bold">
+                                        <a th:href="@{/seller/orders(keyword=${keyword},status=${selectedStatus},page=0,size=${pageSize},sort='product',direction=${currentSort == 'product' and currentDirection == 'asc' ? 'desc' : 'asc'})}"
+                                           class="inline-flex items-center gap-1 hover:text-primary">
+                                            Sản phẩm
+                                            <i th:if="${currentSort == 'product' and currentDirection == 'asc'}" class="ph ph-caret-up"></i>
+                                            <i th:if="${currentSort == 'product' and currentDirection == 'desc'}" class="ph ph-caret-down"></i>
+                                        </a>
+                                    </th>
+                                    <th class="py-3 pr-6 font-bold">
+                                        <a th:href="@{/seller/orders(keyword=${keyword},status=${selectedStatus},page=0,size=${pageSize},sort='buyer',direction=${currentSort == 'buyer' and currentDirection == 'asc' ? 'desc' : 'asc'})}"
+                                           class="inline-flex items-center gap-1 hover:text-primary">
+                                            Buyer
+                                            <i th:if="${currentSort == 'buyer' and currentDirection == 'asc'}" class="ph ph-caret-up"></i>
+                                            <i th:if="${currentSort == 'buyer' and currentDirection == 'desc'}" class="ph ph-caret-down"></i>
+                                        </a>
+                                    </th>
+                                    <th class="py-3 pr-6 font-bold">
+                                        <a th:href="@{/seller/orders(keyword=${keyword},status=${selectedStatus},page=0,size=${pageSize},sort='amount',direction=${currentSort == 'amount' and currentDirection == 'asc' ? 'desc' : 'asc'})}"
+                                           class="inline-flex items-center gap-1 hover:text-primary">
+                                            Giá bán
+                                            <i th:if="${currentSort == 'amount' and currentDirection == 'asc'}" class="ph ph-caret-up"></i>
+                                            <i th:if="${currentSort == 'amount' and currentDirection == 'desc'}" class="ph ph-caret-down"></i>
+                                        </a>
+                                    </th>
+                                    <th class="py-3 pr-6 font-bold">
+                                        <a th:href="@{/seller/orders(keyword=${keyword},status=${selectedStatus},page=0,size=${pageSize},sort='status',direction=${currentSort == 'status' and currentDirection == 'asc' ? 'desc' : 'asc'})}"
+                                           class="inline-flex items-center gap-1 hover:text-primary">
+                                            Trạng thái
+                                            <i th:if="${currentSort == 'status' and currentDirection == 'asc'}" class="ph ph-caret-up"></i>
+                                            <i th:if="${currentSort == 'status' and currentDirection == 'desc'}" class="ph ph-caret-down"></i>
+                                        </a>
+                                    </th>
+                                    <th class="py-3 font-bold">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr th:each="row : ${orderRows}" class="align-top hover:bg-gray-50/80">
+                                    <td class="py-5 pr-6">
+                                        <div class="font-mono text-sm font-bold text-gray-900" th:text="${row.orderNumber}">ORD-0</div>
+                                        <div class="mt-1 text-xs text-gray-500" th:text="${row.formattedCreatedAt}">19/03/2026 12:00</div>
+                                    </td>
+                                    <td class="py-5 pr-6">
+                                        <div class="font-bold text-gray-900 leading-6" th:text="${row.productTitle}">Sản phẩm</div>
+                                        <div class="mt-1 text-xs text-gray-500" th:text="${row.itemStatus}">DELIVERED</div>
+                                    </td>
+                                    <td class="py-5 pr-6">
+                                        <div class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700">
+                                            <i class="ph ph-user"></i>
+                                            <span th:text="${row.buyerUsername}">buyerAccount</span>
+                                        </div>
+                                    </td>
+                                    <td class="py-5 pr-6">
+                                        <div class="font-bold text-gray-900" th:text="${row.formattedSaleAmount}">69,000 ₫</div>
+                                        <div class="mt-1 text-xs text-gray-500">
+                                            Seller nhận: <span th:text="${row.formattedSellerEarnings}">69,000 ₫</span>
+                                        </div>
+                                    </td>
+                                    <td class="py-5 pr-6">
+                                        <span th:if="${row.orderStatus == 'COMPLETED'}"
+                                              class="inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-bold text-green-700">
+                                            <span class="h-2 w-2 rounded-full bg-green-500"></span> COMPLETED
+                                        </span>
+                                        <span th:if="${row.orderStatus == 'DISPUTED'}"
+                                              class="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-bold text-red-700">
+                                            <span class="h-2 w-2 rounded-full bg-red-500"></span> DISPUTED
+                                        </span>
+                                        <span th:if="${row.orderStatus == 'AWAITING_BUYER_CONFIRMATION'}"
+                                              class="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+                                            <span class="h-2 w-2 rounded-full bg-amber-500"></span> AWAITING_BUYER_CONFIRMATION
+                                        </span>
+                                        <span th:if="${row.orderStatus != 'COMPLETED' and row.orderStatus != 'DISPUTED' and row.orderStatus != 'AWAITING_BUYER_CONFIRMATION'}"
+                                              class="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+                                            <span class="h-2 w-2 rounded-full bg-blue-500"></span>
+                                            <span th:text="${row.orderStatus}">PAID</span>
+                                        </span>
+                                        <div th:if="${row.awaitingBuyerConfirmation and row.formattedConfirmationDeadline != null}" class="mt-2 text-xs text-gray-500">
+                                            Buyer xác nhận trước <span th:text="${row.formattedConfirmationDeadline}">20/03/2026 16:07</span>
+                                        </div>
+                                    </td>
+                                    <td class="py-5">
+                                        <div class="flex flex-col items-start gap-2">
+                                            <a th:if="${row.postId != null}" th:href="@{/marketplace/{id}(id=${row.postId})}" target="_blank"
+                                               class="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white hover:bg-blue-700">
+                                                <i class="ph ph-arrow-square-out"></i> Xem bài đăng
+                                            </a>
+                                            <span th:if="${row.disputed}" class="text-xs font-bold text-red-600">Đơn đang trong quy trình tranh chấp</span>
+                                            <span th:if="${row.awaitingBuyerConfirmation}" class="text-xs font-bold text-amber-600">Đang chờ buyer xác nhận nhận hàng</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div th:if="${totalItems > 0}" class="mt-5 flex flex-col gap-3 border-t border-gray-100 pt-5 md:flex-row md:items-center md:justify-between">
+                        <p class="text-sm text-gray-500">
+                            Trang <span class="font-bold text-gray-700" th:text="${currentPage + 1}">1</span>
+                            / <span class="font-bold text-gray-700" th:text="${totalPages == 0 ? 1 : totalPages}">1</span>
+                        </p>
+                        <div class="flex items-center gap-2">
+                            <a th:if="${currentPage > 0}"
+                               th:href="@{/seller/orders(keyword=${keyword},status=${selectedStatus},page=${currentPage - 1},size=${pageSize},sort=${currentSort},direction=${currentDirection})}"
+                               class="btn-outline inline-flex items-center gap-2">
+                                <i class="ph ph-caret-left"></i> Trước
+                            </a>
+                            <span th:if="${currentPage == 0}" class="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-bold text-gray-300">
+                                <i class="ph ph-caret-left"></i> Trước
+                            </span>
+
+                            <span class="inline-flex min-w-10 justify-center rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white"
+                                  th:text="${currentPage + 1}">1</span>
+
+                            <a th:if="${currentPage + 1 < totalPages}"
+                               th:href="@{/seller/orders(keyword=${keyword},status=${selectedStatus},page=${currentPage + 1},size=${pageSize},sort=${currentSort},direction=${currentDirection})}"
+                               class="btn-outline inline-flex items-center gap-2">
+                                Sau <i class="ph ph-caret-right"></i>
+                            </a>
+                            <span th:if="${currentPage + 1 >= totalPages}" class="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-bold text-gray-300">
+                                Sau <i class="ph ph-caret-right"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        function toggleUserMenu() {
+            document.getElementById('userMenu').classList.toggle('hidden');
+        }
+        document.addEventListener('click', function (e) {
+            const wrapper = document.getElementById('userMenuWrapper');
+            if (wrapper && !wrapper.contains(e.target)) {
+                document.getElementById('userMenu').classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+
+</html>

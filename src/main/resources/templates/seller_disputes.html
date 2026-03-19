@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="https://www.thymeleaf.org/thymeleaf-extras-springsecurity6">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrustBridge Market | Khiếu nại từ người mua</title>
+    <!-- CSRF Meta Tags -->
+    <meta name="_csrf" th:content="${_csrf != null ? _csrf.token : ''}" />
+    <meta name="_csrf_header" th:content="${_csrf != null ? _csrf.headerName : ''}" />
+    <!-- Google Fonts: Manrope -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#137fec',
+                        surface: '#f5f7fa',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        error: '#ef4444'
+                    },
+                    fontFamily: {
+                        sans: ['Manrope', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px rgba(0, 0, 0, 0.05)',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style type="text/tailwindcss">
+        body { background-color: #f5f7fa; color: #1a1a1a }
+        .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .hover-lift:hover { transform: translateY(-4px); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08); }
+        .btn-primary { @apply bg-primary text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-blue-600; }
+        .btn-outline { @apply border border-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-gray-50; }
+        .card { @apply bg-white rounded-xl shadow-soft border border-gray-100 p-6; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+
+<body class="font-sans antialiased">
+    <!-- Seller Navigation -->
+    <nav class="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-20 items-center">
+                <div class="flex items-center">
+                    <a th:href="@{/seller/dashboard}" class="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                        <i class="ph-fill ph-shield-check text-primary text-3xl"></i>
+                        <span class="font-bold text-2xl tracking-tight text-gray-900">TrustBridge <span
+                                class="text-xs text-primary ml-1 uppercase bg-blue-100 px-2 py-1 rounded">Seller</span></span>
+                    </a>
+                    <div class="hidden md:flex ml-10 space-x-8">
+                        <a th:href="@{/seller/dashboard}"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Dashboard</a>
+                        <a th:href="@{/seller/posts}"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Bài đăng</a>
+                        <a th:href="@{/seller/orders}"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Đơn hàng</a>
+                        <a th:href="@{/seller/disputes}"
+                            class="bg-red-50 text-error font-bold px-3 py-2 rounded-lg transition-colors">Khiếu nại</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <div class="relative cursor-pointer hover:bg-gray-100 p-2 rounded-full transition-colors">
+                        <i class="ph-fill ph-bell text-xl text-gray-600"></i>
+                        <div class="absolute top-1 right-1 w-2.5 h-2.5 bg-error rounded-full border-2 border-white"></div>
+                    </div>
+                    <div class="relative" id="userMenuWrapper">
+                        <button id="userMenuBtn" onclick="toggleUserMenu()"
+                            class="flex items-center gap-3 cursor-pointer group focus:outline-none">
+                            <div class="w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center font-bold shadow-soft group-hover:scale-105 transition-transform">
+                                <span th:text="${#authentication.principal.username}">SL</span>
+                            </div>
+                            <div class="hidden md:block group-hover:opacity-80 transition-opacity text-left">
+                                <div class="text-sm font-bold text-gray-900 leading-tight" th:text="${currentUser.username}"></div>
+                                <div class="text-xs text-gray-500">Seller</div>
+                            </div>
+                            <i class="ph ph-caret-down text-gray-400 text-sm"></i>
+                        </button>
+                        <!-- Dropdown -->
+                        <div id="userMenu"
+                            class="hidden absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
+                            <a th:href="@{/seller/dashboard}"
+                                class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-bold">
+                                <i class="ph ph-squares-four"></i> Dashboard
+                            </a>
+                            <div class="border-t border-gray-100 my-1"></div>
+                            <form action="/logout" method="POST">
+                                <button type="submit"
+                                    class="w-full flex items-center gap-2 px-4 py-2 text-sm text-error hover:bg-red-50 font-bold text-left">
+                                    <i class="ph ph-sign-out"></i> Đăng xuất
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Success/Error Messages -->
+        <div th:if="${successMessage}" class="mb-6 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg flex items-center gap-2">
+            <i class="ph-fill ph-check-circle text-success"></i>
+            <span th:text="${successMessage}"></span>
+        </div>
+        <div th:if="${errorMessage}" class="mb-6 bg-red-50 border border-red-200 text-error px-4 py-3 rounded-lg flex items-center gap-2">
+            <i class="ph-fill ph-warning-circle text-error"></i>
+            <span th:text="${errorMessage}"></span>
+        </div>
+        
+        <div class="flex flex-col md:flex-row gap-8">
+            <!-- Sidebar -->
+            <aside class="w-full md:w-64 flex-shrink-0">
+                <div class="bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden sticky top-28">
+                    <div class="p-6 border-b border-gray-100 text-center">
+                        <div class="relative inline-block">
+                            <div class="w-20 h-20 mx-auto rounded-full bg-gray-900 text-white flex items-center justify-center font-bold text-2xl mb-3 shadow-md">
+                                <span th:text="${#strings.substring(currentUser.username, 0, 2)}">SL</span>
+                            </div>
+                            <div class="absolute bottom-3 right-0 w-4 h-4 bg-success border-2 border-white rounded-full"></div>
+                        </div>
+                        <h2 class="font-bold text-lg text-gray-900" th:text="${currentUser.username}"></h2>
+                        <div class="flex items-center justify-center gap-1 text-sm text-success mt-1">
+                            <i class="ph-fill ph-storefront"></i> Verified Seller
+                        </div>
+                    </div>
+                    <nav class="p-4 space-y-1">
+                        <div class="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Bán hàng</div>
+                        <a th:href="@{/seller/dashboard}"
+                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-squares-four text-lg"></i> Tổng quan
+                        </a>
+                        <a th:href="@{/seller/posts}"
+                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-article text-lg"></i> Bài đăng
+                        </a>
+                        <a th:href="@{/seller/orders}"
+                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-shopping-bag text-lg"></i> Đơn hàng
+                        </a>
+                        <a th:href="@{/seller/disputes}"
+                            class="flex items-center gap-3 px-4 py-3 bg-red-50 text-error font-bold rounded-lg transition-colors">
+                            <i class="ph-fill ph-gavel text-lg"></i> Khiếu nại
+                        </a>
+                    </nav>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="flex-1 space-y-6">
+                <!-- Header -->
+                <div class="flex justify-between items-center mb-2">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">Khiếu nại từ người mua</h1>
+                        <p class="text-gray-500 text-sm mt-1">Xem và phản hồi các khiếu nại từ người mua</p>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="card flex flex-col justify-center hover-lift">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 rounded-full bg-blue-100 text-primary flex items-center justify-center shadow-sm">
+                                <i class="ph-fill ph-gavel text-2xl"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-gray-500 text-sm font-bold mb-1">Tổng khiếu nại</h3>
+                        <div class="text-3xl font-bold text-gray-900" th:text="${totalItems}">0</div>
+                    </div>
+                    <div class="card flex flex-col justify-center hover-lift border-red-100 bg-red-50/30">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 rounded-full bg-red-100 text-error flex items-center justify-center shadow-sm">
+                                <i class="ph-fill ph-warning-circle text-2xl"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-gray-500 text-sm font-bold mb-1">Chờ xử lý</h3>
+                        <div class="text-3xl font-bold text-gray-900" th:text="${#lists.size(disputes.?[disputeStatus.statusName == 'OPENED'])}">0</div>
+                    </div>
+                    <div class="card flex flex-col justify-center hover-lift border-orange-100 bg-orange-50/30">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 rounded-full bg-orange-100 text-warning flex items-center justify-center shadow-sm">
+                                <i class="ph-fill ph-magnifying-glass text-2xl"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-gray-500 text-sm font-bold mb-1">Đang điều tra</h3>
+                        <div class="text-3xl font-bold text-gray-900" th:text="${#lists.size(disputes.?[disputeStatus.statusName == 'UNDER_REVIEW'])}">0</div>
+                    </div>
+                    <div class="card flex flex-col justify-center hover-lift border-green-100 bg-green-50/30">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 rounded-full bg-green-100 text-success flex items-center justify-center shadow-sm">
+                                <i class="ph-fill ph-check-circle text-2xl"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-gray-500 text-sm font-bold mb-1">Đã giải quyết</h3>
+                        <div class="text-3xl font-bold text-gray-900" th:text="${#lists.size(disputes.?[disputeStatus.statusName == 'RESOLVED'])}">0</div>
+                    </div>
+                </div>
+
+                <!-- Disputes Table -->
+                <div class="card border border-red-100">
+                    <div class="flex justify-between items-center mb-6">
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-xl font-bold text-gray-900">Danh sách khiếu nại</h2>
+                            <span class="bg-error text-white text-xs font-bold px-2 py-0.5 rounded-full">Khẩn cấp</span>
+                        </div>
+                        <form th:action="@{/seller/disputes}" method="get" class="flex items-center gap-2">
+                            <select name="status" onchange="this.form.submit()"
+                                class="text-sm font-bold text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <option value="">Tất cả trạng thái</option>
+                                <option value="OPENED" th:selected="${selectedStatus == 'OPENED'}">Chờ xử lý</option>
+                                <option value="UNDER_REVIEW" th:selected="${selectedStatus == 'UNDER_REVIEW'}">Đang điều tra</option>
+                                <option value="RESOLVED" th:selected="${selectedStatus == 'RESOLVED'}">Đã giải quyết</option>
+                                <option value="CANCELLED" th:selected="${selectedStatus == 'CANCELLED'}">Đã hủy</option>
+                            </select>
+                        </form>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div th:if="${#lists.isEmpty(disputes)}" class="text-center py-12">
+                        <div class="w-20 h-20 mx-auto rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                            <i class="ph ph-gavel text-4xl text-gray-400"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-gray-700 mb-2">Không có khiếu nại nào</h3>
+                        <p class="text-gray-500 text-sm">Bạn chưa có khiếu nại nào từ người mua.</p>
+                    </div>
+
+                    <!-- Content -->
+                    <div th:unless="${#lists.isEmpty(disputes)}" class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b-2 border-gray-100 text-xs uppercase tracking-wider text-gray-500">
+                                    <th class="py-3 px-4 font-bold">Mã GD / Giá</th>
+                                    <th class="py-3 px-4 font-bold">Nội dung khiếu nại</th>
+                                    <th class="py-3 px-4 font-bold">Người mua</th>
+                                    <th class="py-3 px-4 font-bold">Trạng thái</th>
+                                    <th class="py-3 px-4 font-bold">Thời gian</th>
+                                    <th class="py-3 px-4 font-bold text-right">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr th:each="dispute : ${disputes}" class="hover:bg-gray-50 transition-colors">
+                                    <td class="py-4 px-4">
+                                        <div class="font-bold text-gray-900" th:text="${dispute.order.orderNumber}">ORD-001</div>
+                                        <div class="text-sm text-gray-500" th:text="${#numbers.formatCurrency(dispute.order.totalAmount)}">$99.00</div>
+                                    </td>
+                                    <td class="py-4 px-4">
+                                        <div class="font-bold text-gray-900 mb-1" th:text="${dispute.disputeType}">Invalid Credential</div>
+                                        <div class="text-sm text-gray-500 line-clamp-2" th:text="${dispute.reason}">Reason description...</div>
+                                    </td>
+                                    <td class="py-4 px-4">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold">
+                                                <span th:text="${#strings.substring(dispute.openedBy.username, 0, 2)}">BU</span>
+                                            </div>
+                                            <div>
+                                                <div class="font-bold text-gray-900 text-sm" th:text="${dispute.openedBy.username}">Buyer</div>
+                                                <div class="text-xs text-gray-500">Người mua</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="py-4 px-4">
+                                        <span th:switch="${dispute.disputeStatus.statusName}">
+                                            <span th:case="'OPENED'" class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-error">
+                                                <i class="ph-fill ph-warning-circle"></i> Chờ xử lý
+                                            </span>
+                                            <span th:case="'UNDER_REVIEW'" class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-orange-100 text-warning">
+                                                <i class="ph-fill ph-magnifying-glass"></i> Đang điều tra
+                                            </span>
+                                            <span th:case="'RESOLVED'" class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-success">
+                                                <i class="ph-fill ph-check-circle"></i> Đã giải quyết
+                                            </span>
+                                            <span th:case="'CANCELLED'" class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600">
+                                                <i class="ph-fill ph-x-circle"></i> Đã hủy
+                                            </span>
+                                            <span th:case="*" class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600">
+                                                <i class="ph-fill ph-question"></i> <span th:text="${dispute.disputeStatus.statusName}">Unknown</span>
+                                            </span>
+                                        </span>
+                                    </td>
+                                    <td class="py-4 px-4">
+                                        <div class="text-sm text-gray-900" th:text="${#temporals.format(dispute.openedAt, 'dd/MM/yyyy')}">01/01/2026</div>
+                                        <div class="text-xs text-gray-500" th:text="${#temporals.format(dispute.openedAt, 'HH:mm')}">10:00</div>
+                                    </td>
+                                    <td class="py-4 px-4 text-right">
+                                        <a th:href="@{/seller/disputes/{id}(id=${dispute.disputeId})}"
+                                            class="inline-flex items-center gap-1 text-primary hover:text-blue-700 font-bold text-sm">
+                                            <i class="ph ph-eye"></i> Chi tiết
+                                        </a>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    <div th:unless="${#lists.isEmpty(disputes)}" class="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
+                        <div class="text-sm text-gray-500">
+                            Hiển thị <span th:text="${disputes.size()}">0</span> trong tổng số <span th:text="${totalItems}">0</span> khiếu nại
+                        </div>
+                        <div class="flex gap-2" th:if="${totalPages > 1}">
+                            <a th:if="${currentPage > 0}"
+                               th:href="@{/seller/disputes(page=${currentPage - 1}, size=${pageSize}, status=${selectedStatus})}"
+                               class="px-3 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 font-bold text-sm">
+                                <i class="ph ph-caret-left"></i> Trước
+                            </a>
+                            <span th:each="i : ${#numbers.sequence(0, totalPages - 1)}"
+                                  th:if="${totalPages <= 5 || (i >= currentPage - 2 && i <= currentPage + 2)}">
+                                <a th:href="@{/seller/disputes(page=${i}, size=${pageSize}, status=${selectedStatus})}"
+                                   th:class="${i == currentPage} ? 'px-3 py-1 rounded-lg bg-primary text-white font-bold text-sm' : 'px-3 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 font-bold text-sm'"
+                                   th:text="${i + 1}">1</a>
+                            </span>
+                            <a th:if="${currentPage < totalPages - 1}"
+                               th:href="@{/seller/disputes(page=${currentPage + 1}, size=${pageSize}, status=${selectedStatus})}"
+                               class="px-3 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 font-bold text-sm">
+                                Sau <i class="ph ph-caret-right"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center text-sm text-gray-500 border-t border-gray-800 pt-8">
+            <div class="flex items-center gap-2 mb-4 md:mb-0">
+                <i class="ph-fill ph-shield-check text-primary text-2xl"></i>
+                <span class="font-bold text-lg tracking-tight text-gray-300">TrustBridge Market</span>
+            </div>
+            <p>&copy; 2026 TrustBridge Market. Protected by escrow transaction system.</p>
+        </div>
+    </footer>
+
+    <!-- User Menu Toggle Script -->
+    <script>
+        function toggleUserMenu() {
+            const menu = document.getElementById('userMenu');
+            menu.classList.toggle('hidden');
+        }
+
+        // Close menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const menuWrapper = document.getElementById('userMenuWrapper');
+            const menu = document.getElementById('userMenu');
+            if (!menuWrapper.contains(event.target)) {
+                menu.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+
+</html>

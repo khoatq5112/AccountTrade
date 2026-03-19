@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="https://www.thymeleaf.org/thymeleaf-extras-springsecurity6">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrustBridge Market | Quản lý người dùng</title>
+    <!-- CSRF Meta Tags -->
+    <meta name="_csrf" th:content="${_csrf != null ? _csrf.token : ''}" />
+    <meta name="_csrf_header" th:content="${_csrf != null ? _csrf.headerName : ''}" />
+    <!-- Google Fonts: Manrope -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#137fec',
+                        surface: '#f5f7fa',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        error: '#ef4444'
+                    },
+                    fontFamily: {
+                        sans: ['Manrope', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px rgba(0, 0, 0, 0.05)',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style type="text/tailwindcss">
+        body { background-color: #f5f7fa; color: #1a1a1a; }
+        .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .hover-lift:hover { transform: translateY(-4px); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08); }
+        .btn-primary { @apply bg-primary text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-blue-600; }
+        .btn-outline { @apply border border-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-gray-50; }
+        .card { @apply bg-white rounded-xl shadow-soft border border-gray-100 p-6; }
+        .skeleton { @apply animate-pulse bg-gray-200 rounded; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+
+<body class="font-sans antialiased">
+    <!-- Admin Navigation -->
+    <nav class="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-20 items-center">
+                <div class="flex items-center">
+                    <a th:href="@{/marketplace}" class="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                        <i class="ph-fill ph-shield-check text-primary text-3xl"></i>
+                        <span class="font-bold text-2xl tracking-tight text-gray-900">TrustBridge <span
+                                class="text-xs text-primary ml-1 uppercase bg-blue-100 px-2 py-1 rounded">Admin</span></span>
+                    </a>
+                    <div class="hidden md:flex ml-10 space-x-8">
+                        <a th:href="@{/admin/dashboard}"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Dashboard</a>
+                        <a th:href="@{/admin/users}"
+                            class="text-primary font-bold px-3 py-2 transition-colors border-b-2 border-primary">Users</a>
+                        <a th:href="@{/admin/posts}"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Posts</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <div class="relative cursor-pointer hover:bg-gray-100 p-2 rounded-full transition-colors">
+                        <i class="ph-fill ph-bell text-xl text-gray-600"></i>
+                    </div>
+                    <div class="relative" id="userMenuWrapper">
+                        <button id="userMenuBtn" onclick="toggleUserMenu()"
+                            class="flex items-center gap-3 cursor-pointer group focus:outline-none">
+                            <div class="w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center font-bold shadow-soft group-hover:scale-105 transition-transform">
+                                AD
+                            </div>
+                            <div class="hidden md:block group-hover:opacity-80 transition-opacity text-left">
+                                <div class="text-sm font-bold text-gray-900 leading-tight">System Admin</div>
+                                <div class="text-xs text-gray-500">Quản trị viên</div>
+                            </div>
+                            <i class="ph ph-caret-down text-gray-400 text-sm"></i>
+                        </button>
+                        <!-- Dropdown -->
+                        <div id="userMenu"
+                            class="hidden absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
+                            <a th:href="@{/admin/dashboard}"
+                                class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-bold">
+                                <i class="ph ph-squares-four"></i> Dashboard
+                            </a>
+                            <div class="border-t border-gray-100 my-1"></div>
+                            <form action="/logout" method="POST">
+                                <button type="submit"
+                                    class="w-full flex items-center gap-2 px-4 py-2 text-sm text-error hover:bg-red-50 font-bold text-left">
+                                    <i class="ph ph-sign-out"></i> Đăng xuất
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Dashboard Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="flex flex-col md:flex-row gap-8">
+
+            <!-- Sidebar -->
+            <aside class="w-full md:w-64 flex-shrink-0">
+                <div class="bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden sticky top-28">
+                    <div class="p-6 border-b border-gray-100 text-center">
+                        <div class="relative inline-block">
+                            <div class="w-20 h-20 mx-auto rounded-full bg-gray-900 text-white flex items-center justify-center font-bold text-2xl mb-3 shadow-md">
+                                AD
+                            </div>
+                            <div class="absolute bottom-3 right-0 w-4 h-4 bg-success border-2 border-white rounded-full"></div>
+                        </div>
+                        <h2 class="font-bold text-lg text-gray-900">System Admin</h2>
+                        <div class="flex items-center justify-center gap-1 text-sm text-success mt-1">
+                            <i class="ph-fill ph-shield-check"></i> Full Access
+                        </div>
+                    </div>
+                    <nav class="p-4 space-y-1">
+                        <div class="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Hệ thống</div>
+                        <a th:href="@{/admin/dashboard}"
+                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-squares-four text-lg"></i> Tổng quan
+                        </a>
+                        <a th:href="@{/admin/users}"
+                            class="flex items-center gap-3 px-4 py-3 bg-blue-50 text-primary font-bold rounded-lg transition-colors">
+                            <i class="ph-fill ph-users text-lg"></i> Quản lý người dùng
+                        </a>
+                        <a th:href="@{/admin/posts}"
+                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-list-checks text-lg"></i> Kiểm duyệt sản phẩm
+                        </a>
+                        <div class="mt-4 px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Tài chính</div>
+                        <a th:href="@{/admin/wallets}"
+                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-bank text-lg"></i> Quản lý ví
+                        </a>
+                        <a th:href="@{/admin/transactions}"
+                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-swap text-lg"></i> Lịch sử giao dịch
+                        </a>
+                        <a th:href="@{/admin/disputes}"
+                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
+                            <i class="ph ph-gavel text-lg"></i> Khiếu nại
+                        </a>
+                    </nav>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="flex-1 space-y-6">
+                <!-- Header -->
+                <div class="flex justify-between items-center mb-2">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">Quản lý người dùng</h1>
+                        <p class="text-gray-500 text-sm mt-1">Xem và quản lý tất cả người dùng trên hệ thống</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="AdminUsers.refresh()" class="btn-outline flex items-center gap-2 bg-white">
+                            <i class="ph-bold ph-arrow-clockwise"></i> Làm mới
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="card flex flex-col justify-center hover-lift">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 rounded-full bg-blue-100 text-primary flex items-center justify-center shadow-sm">
+                                <i class="ph-fill ph-users text-2xl"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-gray-500 text-sm font-bold mb-1">Tổng người dùng</h3>
+                        <div id="stat-total-users" class="text-3xl font-bold text-gray-900">0</div>
+                    </div>
+                    <div class="card flex flex-col justify-center hover-lift border-green-100 bg-green-50/30">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 rounded-full bg-green-100 text-success flex items-center justify-center shadow-sm">
+                                <i class="ph-fill ph-user-circle-check text-2xl"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-gray-500 text-sm font-bold mb-1">Đang hoạt động</h3>
+                        <div id="stat-active-users" class="text-3xl font-bold text-gray-900">0</div>
+                    </div>
+                    <div class="card flex flex-col justify-center hover-lift border-purple-100 bg-purple-50/30">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center shadow-sm">
+                                <i class="ph-fill ph-storefront text-2xl"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-gray-500 text-sm font-bold mb-1">Người bán</h3>
+                        <div id="stat-sellers" class="text-3xl font-bold text-gray-900">0</div>
+                    </div>
+                    <div class="card flex flex-col justify-center hover-lift border-red-100 bg-red-50/30">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 rounded-full bg-red-100 text-error flex items-center justify-center shadow-sm">
+                                <i class="ph-fill ph-user-circle-minus text-2xl"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-gray-500 text-sm font-bold mb-1">Vô hiệu hóa</h3>
+                        <div id="stat-inactive-users" class="text-3xl font-bold text-gray-900">0</div>
+                    </div>
+                </div>
+
+                <!-- Users Table -->
+                <div class="card">
+                    <div class="flex justify-between items-center mb-6">
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-xl font-bold text-gray-900">Danh sách người dùng</h2>
+                        </div>
+                        <div class="flex gap-2">
+                            <select id="role-filter" onchange="AdminUsers.filterByRole(this.value)"
+                                class="text-sm font-bold text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <option value="">Tất cả vai trò</option>
+                                <option value="ADMIN">Admin</option>
+                                <option value="SELLER">Seller</option>
+                                <option value="BUYER">Buyer</option>
+                            </select>
+                            <select id="status-filter" onchange="AdminUsers.filterByStatus(this.value)"
+                                class="text-sm font-bold text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                                <option value="">Tất cả trạng thái</option>
+                                <option value="active">Hoạt động</option>
+                                <option value="inactive">Vô hiệu</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Loading State -->
+                    <div id="users-loading" class="text-center py-8">
+                        <i class="ph ph-spinner ph-spin text-2xl text-gray-400"></i>
+                    </div>
+
+                    <!-- Content -->
+                    <div id="users-content" class="overflow-x-auto hidden">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b-2 border-gray-100 text-xs uppercase tracking-wider text-gray-500">
+                                    <th class="py-3 px-4 font-bold">Người dùng</th>
+                                    <th class="py-3 px-4 font-bold">Email</th>
+                                    <th class="py-3 px-4 font-bold">Vai trò</th>
+                                    <th class="py-3 px-4 font-bold">Trạng thái</th>
+                                    <th class="py-3 px-4 font-bold">Ngày đăng ký</th>
+                                    <th class="py-3 px-4 font-bold text-right">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body" class="divide-y divide-gray-100">
+                                <!-- Dynamic content loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Error State -->
+                    <div id="users-error" class="hidden"></div>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center text-sm text-gray-500 border-t border-gray-800 pt-8">
+            <div class="flex items-center gap-2 mb-4 md:mb-0">
+                <i class="ph-fill ph-shield-check text-primary text-2xl"></i>
+                <span class="font-bold text-lg tracking-tight text-gray-300">TrustBridge Market</span>
+            </div>
+            <p>&copy; 2026 TrustBridge Market. Protected by escrow transaction system.</p>
+        </div>
+    </footer>
+
+    <!-- User Menu Toggle Script -->
+    <script>
+        function toggleUserMenu() {
+            document.getElementById('userMenu').classList.toggle('hidden');
+        }
+        document.addEventListener('click', function (e) {
+            const wrapper = document.getElementById('userMenuWrapper');
+            if (wrapper && !wrapper.contains(e.target)) {
+                document.getElementById('userMenu').classList.add('hidden');
+            }
+        });
+    </script>
+    
+    <!-- Admin Users Module -->
+    <script src="/js/admin-users.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            AdminUsers.init();
+        });
+    </script>
+</body>
+
+</html>

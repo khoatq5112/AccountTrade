@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="https://www.thymeleaf.org/thymeleaf-extras-springsecurity6">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrustBridge Market | Chi tiết khiếu nại</title>
+    <!-- CSRF Meta Tags -->
+    <meta name="_csrf" th:content="${_csrf != null ? _csrf.token : ''}" />
+    <meta name="_csrf_header" th:content="${_csrf != null ? _csrf.headerName : ''}" />
+    <!-- Google Fonts: Manrope -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#137fec',
+                        surface: '#f5f7fa',
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        error: '#ef4444'
+                    },
+                    fontFamily: {
+                        sans: ['Manrope', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px rgba(0, 0, 0, 0.05)',
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style type="text/tailwindcss">
+        body { background-color: #f5f7fa; color: #1a1a1a }
+        .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .hover-lift:hover { transform: translateY(-4px); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08); }
+        .btn-primary { @apply bg-primary text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-blue-600; }
+        .btn-outline { @apply border border-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-gray-50; }
+        .btn-danger { @apply bg-error text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-red-600; }
+        .card { @apply bg-white rounded-xl shadow-soft border border-gray-100 p-6; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+
+<body class="font-sans antialiased">
+    <!-- Buyer Navigation -->
+    <nav class="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-20 items-center">
+                <div class="flex items-center">
+                    <a th:href="@{/marketplace}" class="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                        <i class="ph-fill ph-shield-check text-primary text-3xl"></i>
+                        <span class="font-bold text-2xl tracking-tight text-gray-900">TrustBridge <span
+                                class="text-xs text-primary ml-1 uppercase bg-blue-100 px-2 py-1 rounded">Buyer</span></span>
+                    </a>
+                    <div class="hidden md:flex ml-10 space-x-8">
+                        <a th:href="@{/buyer/dashboard}"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Dashboard</a>
+                        <a th:href="@{/buyer/purchases}"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Đơn hàng</a>
+                        <a th:href="@{/buyer/disputes}"
+                            class="bg-red-50 text-error font-bold px-3 py-2 rounded-lg transition-colors">Khiếu nại</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <div class="relative cursor-pointer hover:bg-gray-100 p-2 rounded-full transition-colors">
+                        <i class="ph-fill ph-bell text-xl text-gray-600"></i>
+                        <div class="absolute top-1 right-1 w-2.5 h-2.5 bg-error rounded-full border-2 border-white"></div>
+                    </div>
+                    <div class="relative" id="userMenuWrapper">
+                        <button id="userMenuBtn" onclick="toggleUserMenu()"
+                            class="flex items-center gap-3 cursor-pointer group focus:outline-none">
+                            <div class="w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center font-bold shadow-soft group-hover:scale-105 transition-transform">
+                                <span th:text="${#authentication.principal.username}">AD</span>
+                            </div>
+                            <div class="hidden md:block group-hover:opacity-80 transition-opacity text-left">
+                                <div class="text-sm font-bold text-gray-900 leading-tight" th:text="${currentUser.username}"></div>
+                                <div class="text-xs text-gray-500" th:text="${currentUser.role.roleName} == 'Buyer' ? 'Người mua' : 'Người bán'"></div>
+                            </div>
+                            <i class="ph ph-caret-down text-gray-400 text-sm"></i>
+                        </button>
+                        <!-- Dropdown -->
+                        <div id="userMenu"
+                            class="hidden absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
+                            <a th:href="@{/buyer/dashboard}"
+                                class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-bold">
+                                <i class="ph ph-squares-four"></i> Dashboard
+                            </a>
+                            <div class="border-t border-gray-100 my-1"></div>
+                            <form action="/logout" method="POST">
+                                <button type="submit"
+                                    class="w-full flex items-center gap-2 px-4 py-2 text-sm text-error hover:bg-red-50 font-bold text-left">
+                                    <i class="ph ph-sign-out"></i> Đăng xuất
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Success/Error Messages -->
+        <div th:if="${successMessage}" class="mb-6 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg flex items-center gap-2">
+            <i class="ph-fill ph-check-circle text-success"></i>
+            <span th:text="${successMessage}"></span>
+        </div>
+        <div th:if="${errorMessage}" class="mb-6 bg-red-50 border border-red-200 text-error px-4 py-3 rounded-lg flex items-center gap-2">
+            <i class="ph-fill ph-warning-circle text-error"></i>
+            <span th:text="${errorMessage}"></span>
+        </div>
+
+        <!-- Breadcrumb -->
+        <div class="flex items-center gap-2 text-sm text-gray-500 mb-6">
+            <a th:href="@{/buyer/disputes}" class="hover:text-primary">Khiếu nại</a>
+            <i class="ph ph-caret-right text-xs"></i>
+            <span class="text-gray-900 font-bold" th:text="${dispute.disputeNumber}">DSP-001</span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Column - Dispute Details -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Dispute Header -->
+                <div class="card">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-900" th:text="${dispute.disputeNumber}">DSP-001</h1>
+                            <p class="text-gray-500 text-sm mt-1">
+                                Tạo lúc <span th:text="${#temporals.format(dispute.openedAt, 'dd/MM/yyyy HH:mm')}">01/01/2026 10:00</span>
+                            </p>
+                        </div>
+                        <span th:switch="${dispute.status}">
+                            <span th:case="'OPENED'" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-bold bg-red-100 text-error">
+                                <i class="ph-fill ph-warning-circle"></i> Chờ xử lý
+                            </span>
+                            <span th:case="'UNDER_REVIEW'" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-bold bg-orange-100 text-warning">
+                                <i class="ph-fill ph-magnifying-glass"></i> Đang điều tra
+                            </span>
+                            <span th:case="'RESOLVED'" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-bold bg-green-100 text-success">
+                                <i class="ph-fill ph-check-circle"></i> Đã giải quyết
+                            </span>
+                            <span th:case="'CANCELLED'" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-bold bg-gray-100 text-gray-600">
+                                <i class="ph-fill ph-x-circle"></i> Đã hủy
+                            </span>
+                        </span>
+                    </div>
+
+                    <!-- Dispute Type & Reason -->
+                    <div class="border-t border-gray-100 pt-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Loại khiếu nại</label>
+                                <div class="mt-1 font-bold text-gray-900" th:text="${dispute.disputeType}">Invalid Credential</div>
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Đơn hàng liên quan</label>
+                                <div class="mt-1">
+                                    <a th:href="@{/buyer/purchases(orderId=${dispute.order.orderId})}" class="text-primary hover:underline font-bold" th:text="${dispute.order.orderNumber}">ORD-001</a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">Lý do</label>
+                            <div class="mt-1 text-gray-700" th:text="${dispute.reason}">Reason description...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Evidence Section -->
+                <div class="card">
+                    <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <i class="ph ph-files text-primary"></i> Bằng chứng
+                    </h2>
+                    
+                    <!-- Buyer Evidence -->
+                    <div class="mb-6">
+                        <h3 class="text-sm font-bold text-gray-700 mb-2">Bằng chứng của bạn</h3>
+                        <div th:if="${dispute.buyerEvidence}" class="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                            <p class="text-gray-700 whitespace-pre-wrap" th:text="${dispute.buyerEvidence}">Buyer evidence...</p>
+                        </div>
+                        <div th:unless="${dispute.buyerEvidence}" class="text-gray-500 text-sm italic">
+                            Chưa có bằng chứng nào được cung cấp.
+                        </div>
+                    </div>
+
+                    <!-- Seller Response -->
+                    <div th:if="${dispute.sellerResponse}">
+                        <h3 class="text-sm font-bold text-gray-700 mb-2">Phản hồi từ người bán</h3>
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <p class="text-gray-700 whitespace-pre-wrap" th:text="${dispute.sellerResponse}">Seller response...</p>
+                            <div th:if="${dispute.sellerEvidence}" class="mt-3 pt-3 border-t border-gray-200">
+                                <span class="text-xs font-bold text-gray-500">Bằng chứng đính kèm:</span>
+                                <p class="text-gray-600 text-sm mt-1" th:text="${dispute.sellerEvidence}">Seller evidence...</p>
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">
+                            Phản hồi lúc <span th:text="${#temporals.format(dispute.sellerRespondedAt, 'dd/MM/yyyy HH:mm')}">01/01/2026 10:00</span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Resolution Section (if resolved) -->
+                <div th:if="${dispute.status == 'RESOLVED' or dispute.status == 'CANCELLED'}" class="card">
+                    <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <i class="ph ph-check-circle text-success"></i> Kết quả
+                    </h2>
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span th:if="${dispute.resolutionType == 'BUYER_FAVOR'}" class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-success">
+                                <i class="ph-fill ph-check"></i> Hữu lợi cho bạn
+                            </span>
+                            <span th:if="${dispute.resolutionType == 'SELLER_FAVOR'}" class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-error">
+                                <i class="ph-fill ph-x"></i> Hữu lợi cho người bán
+                            </span>
+                            <span th:if="${dispute.resolutionType == 'CANCELLED'}" class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600">
+                                <i class="ph-fill ph-x-circle"></i> Đã hủy
+                            </span>
+                        </div>
+                        <p class="text-gray-700" th:text="${dispute.resolutionNotes}">Resolution notes...</p>
+                        <p class="text-xs text-gray-500 mt-3">
+                            Giải quyết lúc <span th:text="${#temporals.format(dispute.resolvedAt, 'dd/MM/yyyy HH:mm')}">01/01/2026 10:00</span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Messages Section -->
+                <div class="card">
+                    <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <i class="ph ph-chat-circle text-primary"></i> Tin nhắn
+                        <span th:if="${dispute.messages != null}" class="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full" th:text="${dispute.messages.size()}">0</span>
+                    </h2>
+
+                    <!-- Messages List -->
+                    <div class="space-y-4 mb-6 max-h-96 overflow-y-auto">
+                        <div th:if="${dispute.messages == null or dispute.messages.isEmpty()}" class="text-center py-8 text-gray-500">
+                            <i class="ph ph-chat-circle-dots text-4xl text-gray-300 mb-2"></i>
+                            <p>Chưa có tin nhắn nào.</p>
+                        </div>
+                        <div th:each="message : ${dispute.messages}" class="flex gap-3">
+                            <div class="flex-shrink-0">
+                                <div th:if="${message.senderRole == 'BUYER'}" class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold">
+                                    <span th:text="${#strings.substring(message.senderUsername, 0, 2)}">BU</span>
+                                </div>
+                                <div th:if="${message.senderRole == 'SELLER'}" class="w-8 h-8 rounded-full bg-gray-600 text-white flex items-center justify-center text-sm font-bold">
+                                    <span th:text="${#strings.substring(message.senderUsername, 0, 2)}">SL</span>
+                                </div>
+                                <div th:if="${message.senderRole == 'ADMIN'}" class="w-8 h-8 rounded-full bg-success text-white flex items-center justify-center text-sm font-bold">
+                                    <i class="ph-fill ph-shield-check text-sm"></i>
+                                </div>
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="font-bold text-sm text-gray-900" th:text="${message.senderUsername}">User</span>
+                                    <span th:if="${message.senderRole == 'BUYER'}" class="text-xs bg-blue-100 text-primary px-1.5 py-0.5 rounded">Bạn</span>
+                                    <span th:if="${message.senderRole == 'SELLER'}" class="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">Người bán</span>
+                                    <span th:if="${message.senderRole == 'ADMIN'}" class="text-xs bg-green-100 text-success px-1.5 py-0.5 rounded">Admin</span>
+                                    <span class="text-xs text-gray-400" th:text="${#temporals.format(message.createdAt, 'dd/MM HH:mm')}">01/01 10:00</span>
+                                </div>
+                                <div class="bg-gray-50 rounded-lg p-3">
+                                    <p class="text-gray-700 text-sm whitespace-pre-wrap" th:text="${message.content}">Message content...</p>
+                                    <div th:if="${message.hasAttachment}" class="mt-2">
+                                        <a th:href="${message.attachmentPath}" target="_blank" class="text-primary text-sm hover:underline flex items-center gap-1">
+                                            <i class="ph ph-paperclip"></i> Xem tệp đính kèm
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Message Form (only if dispute is open) -->
+                    <form th:if="${dispute.status == 'OPENED' or dispute.status == 'UNDER_REVIEW'}"
+                          th:action="@{/buyer/disputes/{id}/messages(id=${dispute.disputeId})}"
+                          method="POST"
+                          class="border-t border-gray-100 pt-4">
+                        <input type="hidden" th:name="${_csrf != null ? _csrf.parameterName : ''}" th:value="${_csrf != null ? _csrf.token : ''}" />
+                        <div class="mb-3">
+                            <label class="text-sm font-bold text-gray-700 mb-1 block">Thêm tin nhắn</label>
+                            <textarea name="message" rows="3"
+                                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                                placeholder="Nhập tin nhắn của bạn..."></textarea>
+                        </div>
+                        <div class="flex justify-end">
+                            <button type="submit" class="btn-primary flex items-center gap-2">
+                                <i class="ph ph-paper-plane-tilt"></i> Gửi tin nhắn
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Right Column - Info & Actions -->
+            <div class="space-y-6">
+                <!-- Order Info -->
+                <div class="card">
+                    <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <i class="ph ph-shopping-bag text-primary"></i> Thông tin đơn hàng
+                    </h2>
+                    <div class="space-y-3">
+                        <div class="flex justify-between">
+                            <span class="text-gray-500 text-sm">Mã đơn hàng</span>
+                            <a th:href="@{/buyer/purchases(orderId=${dispute.order.orderId})}" class="text-primary font-bold text-sm hover:underline" th:text="${dispute.order.orderNumber}">ORD-001</a>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500 text-sm">Giá trị</span>
+                            <span class="font-bold text-gray-900 text-sm" th:text="${#numbers.formatCurrency(dispute.order.totalAmount)}">$99.00</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500 text-sm">Ngày tạo</span>
+                            <span class="text-gray-900 text-sm" th:text="${#temporals.format(dispute.order.createdAt, 'dd/MM/yyyy')}">01/01/2026</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Parties Info -->
+                <div class="card">
+                    <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <i class="ph ph-users text-primary"></i> Các bên liên quan
+                    </h2>
+                    <div class="space-y-4">
+                        <!-- Buyer -->
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold">
+                                <span th:text="${#strings.substring(dispute.buyer.username, 0, 2)}">BU</span>
+                            </div>
+                            <div>
+                                <div class="font-bold text-gray-900 text-sm" th:text="${dispute.buyer.username}">Buyer</div>
+                                <div class="text-xs text-gray-500">Người mua (Bạn)</div>
+                            </div>
+                        </div>
+                        <!-- Seller -->
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-gray-600 text-white flex items-center justify-center font-bold">
+                                <span th:text="${#strings.substring(dispute.seller.username, 0, 2)}">SL</span>
+                            </div>
+                            <div>
+                                <div class="font-bold text-gray-900 text-sm" th:text="${dispute.seller.username}">Seller</div>
+                                <div class="text-xs text-gray-500">Người bán</div>
+                            </div>
+                        </div>
+                        <!-- Assigned Admin (if any) -->
+                        <div th:if="${dispute.assignedAdmin}">
+                            <div class="border-t border-gray-100 pt-4 mt-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-full bg-success text-white flex items-center justify-center">
+                                        <i class="ph-fill ph-shield-check"></i>
+                                    </div>
+                                    <div>
+                                        <div class="font-bold text-gray-900 text-sm" th:text="${dispute.assignedAdmin.username}">Admin</div>
+                                        <div class="text-xs text-gray-500">Admin phụ trách</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Timeline -->
+                <div class="card">
+                    <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <i class="ph ph-clock-counter-clockwise text-primary"></i> Timeline
+                    </h2>
+                    <div class="space-y-4">
+                        <div th:each="event : ${dispute.timeline}" class="flex gap-3">
+                            <div class="flex flex-col items-center">
+                                <div th:switch="${event.type}">
+                                    <div th:case="'DISPUTE_OPENED'" class="w-8 h-8 rounded-full bg-red-100 text-error flex items-center justify-center">
+                                        <i class="ph-fill ph-warning-circle text-sm"></i>
+                                    </div>
+                                    <div th:case="'SELLER_RESPONDED'" class="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center">
+                                        <i class="ph-fill ph-chat-circle text-sm"></i>
+                                    </div>
+                                    <div th:case="'ADMIN_ASSIGNED'" class="w-8 h-8 rounded-full bg-blue-100 text-primary flex items-center justify-center">
+                                        <i class="ph-fill ph-user-circle text-sm"></i>
+                                    </div>
+                                    <div th:case="'REVIEW_STARTED'" class="w-8 h-8 rounded-full bg-orange-100 text-warning flex items-center justify-center">
+                                        <i class="ph-fill ph-magnifying-glass text-sm"></i>
+                                    </div>
+                                    <div th:case="'DISPUTE_RESOLVED'" class="w-8 h-8 rounded-full bg-green-100 text-success flex items-center justify-center">
+                                        <i class="ph-fill ph-check-circle text-sm"></i>
+                                    </div>
+                                    <div th:case="*" class="w-8 h-8 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center">
+                                        <i class="ph-fill ph-circle text-sm"></i>
+                                    </div>
+                                </div>
+                                <div th:if="${!eventStat.last}" class="w-0.5 h-full bg-gray-200 mt-1"></div>
+                            </div>
+                            <div class="flex-1 pb-4">
+                                <div class="text-sm text-gray-700" th:text="${event.description}">Event description</div>
+                                <div class="text-xs text-gray-400 mt-1" th:text="${#temporals.format(event.timestamp, 'dd/MM/yyyy HH:mm')}">01/01/2026 10:00</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div th:if="${dispute.status == 'OPENED'}" class="card bg-red-50 border-red-100">
+                    <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <i class="ph ph-warning text-error"></i> Hủy khiếu nại
+                    </h2>
+                    <p class="text-sm text-gray-600 mb-4">
+                        Nếu bạn đã giải quyết được vấn đề với người bán, bạn có thể hủy khiếu nại này. Escrow sẽ được giải phóng.
+                    </p>
+                    <form th:action="@{/buyer/disputes/{id}/cancel(id=${dispute.disputeId})}"
+                          method="POST"
+                          onsubmit="return confirm('Bạn có chắc muốn hủy khiếu nại này? Hành động này không thể hoàn tác.');">
+                        <input type="hidden" th:name="${_csrf != null ? _csrf.parameterName : ''}" th:value="${_csrf != null ? _csrf.token : ''}" />
+                        <div class="mb-3">
+                            <label class="text-sm font-bold text-gray-700 mb-1 block">Lý do hủy</label>
+                            <input type="text" name="reason" required
+                                class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-error focus:border-transparent"
+                                placeholder="Ví dụ: Đã giải quyết trực tiếp với người bán">
+                        </div>
+                        <button type="submit" class="btn-danger w-full flex items-center justify-center gap-2">
+                            <i class="ph ph-x-circle"></i> Hủy khiếu nại
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center text-sm text-gray-500 border-t border-gray-800 pt-8">
+            <div class="flex items-center gap-2 mb-4 md:mb-0">
+                <i class="ph-fill ph-shield-check text-primary text-2xl"></i>
+                <span class="font-bold text-lg tracking-tight text-gray-300">TrustBridge Market</span>
+            </div>
+            <p>&copy; 2026 TrustBridge Market. Protected by escrow transaction system.</p>
+        </div>
+    </footer>
+
+    <!-- User Menu Toggle Script -->
+    <script>
+        function toggleUserMenu() {
+            const menu = document.getElementById('userMenu');
+            menu.classList.toggle('hidden');
+        }
+
+        // Close menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const menuWrapper = document.getElementById('userMenuWrapper');
+            const menu = document.getElementById('userMenu');
+            if (!menuWrapper.contains(event.target)) {
+                menu.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+
+</html>

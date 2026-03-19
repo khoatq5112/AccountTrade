@@ -529,3 +529,54 @@ VALUES
 -- Verify the data
 SELECT 'Posts created:' as info, COUNT(*) as count FROM posts;
 SELECT 'Credentials created:' as info, COUNT(*) as count FROM post_credentials;
+
+-- ============================================
+-- Update thumbnail URLs from Cloudinary
+-- Using w_300,h_200,c_fill for proper card display
+-- ============================================
+
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/esim-japan.svg' WHERE title = 'eSIM Nhật Bản 15 Ngày - 10GB';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/disney-hotstar.svg' WHERE title = 'Disney+ Hotstar Premium - 1 Tháng';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/slack.svg' WHERE title = 'Slack Pro Workspace - 1 Tháng';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/netflix-premium-4k.svg' WHERE title = 'Netflix Premium 4K - 1 Tháng';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/microsoft-365.svg' WHERE title = 'Microsoft 365 Personal - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/hbo-go.svg' WHERE title = 'HBO GO Premium - 1 Tháng';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/skillshare.svg' WHERE title = 'Skillshare Premium - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/crunchyroll.svg' WHERE title = 'Crunchyroll Premium - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/perplexity.svg' WHERE title = 'Perplexity Pro - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/spotify-gift.svg' WHERE title = 'Spotify Gift Card $30 USD';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/office-2021.svg' WHERE title = 'Microsoft Office 2021 Professional Plus';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/dropbox.svg' WHERE title = 'Dropbox Plus 2TB - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/canva.svg' WHERE title = 'Canva Pro - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/midjourney.svg' WHERE title = 'Midjourney Premium - 1 Tháng';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/surfshark.svg' WHERE title = 'Surfshark VPN - 2 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/capcut.svg' WHERE title = 'CapCut Pro - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/google-play.svg' WHERE title = 'Google Play Gift Card $20 USD';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/duolingo-max.svg' WHERE title = 'Duolingo Max - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/chatgpt.svg' WHERE title = 'ChatGPT Plus - 1 Tháng';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/figma.svg' WHERE title = 'Figma Professional - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/claude.svg' WHERE title = 'Claude Pro - 1 Tháng';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/coursera.svg' WHERE title = 'Coursera Plus - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/itunes.svg' WHERE title = 'iTunes Gift Card $25 USD';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/esim-thailand.svg' WHERE title = 'eSIM Thái Lan 7 Ngày - 5GB';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/esim-southkorea.svg' WHERE title = 'eSIM Hàn Quốc 10 Ngày - 8GB';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/google-one-2tb.svg' WHERE title = 'Google One 2TB - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/tinder.svg' WHERE title = 'Tinder Gold - 1 Tháng';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/google-one-200gb.svg' WHERE title = 'Google One 200GB - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/zoom.svg' WHERE title = 'Zoom Pro - 1 Tháng';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/steam.svg' WHERE title = 'Steam Gift Card $20 USD';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/nordvpn.svg' WHERE title = 'NordVPN Premium - 2 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/notion-plus.svg' WHERE title = 'Notion Plus - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/windows-11.svg' WHERE title = 'Windows 11 Pro License Key';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/trello.svg' WHERE title = 'Trello Premium - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/expressvpn.svg' WHERE title = 'ExpressVPN - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/evernote.svg' WHERE title = 'Evernote Personal - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/linkedin.svg' WHERE title = 'LinkedIn Premium Career - 1 Tháng';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/visual-studio.svg' WHERE title = 'Visual Studio Enterprise 2022 - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/quillbot.svg' WHERE title = 'QuillBot Premium - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/adobe-cc.svg' WHERE title = 'Adobe Creative Cloud All Apps - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/lastpass.svg' WHERE title = 'LastPass Premium - 1 Năm';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/spotify-premium.svg' WHERE title = 'Spotify Premium Cá Nhân - 1 Tháng';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/discord.svg' WHERE title = 'Discord Nitro - 1 Tháng';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/youtube-premium.svg' WHERE title = 'YouTube Premium - 1 Tháng';
+UPDATE posts SET thumbnail_url = 'https://res.cloudinary.com/dj5wpyfvh/image/upload/w_300,h_200,c_fill/v1773755979/account-trade/posts/grammarly.svg' WHERE title = 'Grammarly Premium - 1 Năm';

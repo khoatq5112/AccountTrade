@@ -13,7 +13,28 @@ public class AdminController {
         return "admin_dashboard";
     }
 
-    // Additional endpoints for admin actions can be defined here based on the
-    // schema
-    // e.g. managing users, resolving complaints, platform finances
+    @GetMapping("/users")
+    public String viewAdminUsers() {
+        return "admin_users";
+    }
+
+    @GetMapping("/posts")
+    public String viewAdminPosts() {
+        return "admin_posts";
+    }
+
+    @GetMapping("/wallets")
+    public String viewAdminWallets() {
+        return "admin_wallets";
+    }
+
+    @GetMapping("/transactions")
+    public String viewAdminTransactions() {
+        return "admin_transactions";
+    }
+
+    @GetMapping("/disputes")
+    public String viewAdminDisputes() {
+        return "admin_disputes";
+    }
 }

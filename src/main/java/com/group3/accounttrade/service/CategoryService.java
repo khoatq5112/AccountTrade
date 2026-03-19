@@ -2,7 +2,6 @@ package com.group3.accounttrade.service;
 
 import com.group3.accounttrade.entity.Category;
 import com.group3.accounttrade.entity.Post;
-import com.group3.accounttrade.entity.StockStatus;
 import com.group3.accounttrade.repository.CategoryRepository;
 import com.group3.accounttrade.repository.PostRepository;
 import lombok.RequiredArgsConstructor;
@@ -55,7 +54,7 @@ public class CategoryService {
             return List.of();
         }
 
-        return postRepository.findByCategoryAndStockStatus(foundCategory, StockStatus.IN_STOCK, Pageable.ofSize(limit)).getContent();
+        return postRepository.findByCategoryOrderByAvailability(foundCategory, Pageable.ofSize(limit)).getContent();
     }
 
     @Transactional(readOnly = true)

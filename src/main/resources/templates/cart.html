@@ -49,7 +49,7 @@
             <article th:each="item : ${cartItems}" class="rounded-3xl bg-white border border-gray-100 shadow-sm p-5 sm:p-6">
                 <div class="flex flex-col sm:flex-row gap-5">
                     <div class="w-full sm:w-40 h-32 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center overflow-hidden">
-                        <img th:if="${item.thumbnailUrl}" th:src="${item.thumbnailUrl}" th:alt="${item.title}" class="w-full h-full object-cover">
+                        <img th:if="${item.thumbnailUrl}" th:src="${item.thumbnailUrl}" th:alt="${item.title}" class="w-full h-full object-contain">
                         <i th:unless="${item.thumbnailUrl}" class="ph-fill ph-package text-blue-300 text-5xl"></i>
                     </div>
                     <div class="flex-1">

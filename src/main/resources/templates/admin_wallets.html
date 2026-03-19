@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin - Wallets</title>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body class="font-sans bg-gray-100">
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <h1 class="text-2xl font-bold text-gray-900">Quan ly vi</h1>
+        <p class="text-gray-500">Tinh nang dang duoc phat trien...</p>
+        <div class="bg-white rounded-xl shadow p-8 mt-6">
+            <div class="text-center py-12">
+                <i class="ph ph-bank text-6xl text-gray-300"></i>
+                <p class="text-gray-500 mt-4">Trang quan ly vi dang duoc xay dung.</p>
+                <a th:href="@{/admin/dashboard}" class="text-primary hover:underline mt-4 inline-block">Quay ve Dashboard</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

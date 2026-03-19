@@ -58,7 +58,8 @@ public class SecurityConfig {
                                                 .requestMatchers("/", "/index.html", "/login", "/login.html", "/register.html",
                                                                 "/register", "/verify-otp", "/api/auth/**",
                                                                 "/forgot-password", "/reset-password", "/index",
-                                                                "/marketplace", "/marketplace/**", "/category/**", "/api/search/**")
+                                                                "/marketplace", "/marketplace/**", "/category/**", "/api/search/**",
+                                                                "/payment/vnpay/ipn", "/payment/vnpay/return")
                                                 .permitAll()
                                                 .requestMatchers("/seller/**").hasAnyRole("SELLER", "ADMIN")
                                                 .requestMatchers("/admin/**").hasRole("ADMIN")

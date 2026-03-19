@@ -29,10 +29,10 @@ public class PostCredential {
     @ToString.Exclude
     private CredentialStatus credentialStatus;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sold_to_order_id")
+    @OneToMany(mappedBy = "credential", fetch = FetchType.LAZY)
+    @Builder.Default
     @ToString.Exclude
-    private Transaction soldToOrder;
+    private java.util.List<CredentialAssignment> assignments = new java.util.ArrayList<>();
 
     @Column(name = "account_username", nullable = false)
     private String accountUsername;
@@ -47,6 +47,9 @@ public class PostCredential {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    @Transient
+    private String soldOrderNumber;
 
     @Transient
     public boolean isAvailable() {

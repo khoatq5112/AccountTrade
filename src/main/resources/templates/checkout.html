@@ -29,14 +29,14 @@
     <div class="mb-8">
         <p class="text-sm text-gray-500 mb-2">Bước cuối của buyer flow</p>
         <h1 class="text-3xl font-extrabold">Xác nhận checkout</h1>
-        <p class="text-gray-500 mt-2">TrustBridge sẽ tạo giao dịch escrow ở trạng thái chờ xử lý cho sản phẩm này.</p>
+        <p class="text-gray-500 mt-2">TrustBridge sẽ giữ credential ở trạng thái holding, tạo đơn chờ thanh toán và chỉ giao sau khi VNPAY xác nhận thành công.</p>
     </div>
 
     <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <section class="rounded-3xl bg-white border border-gray-100 shadow-sm p-6 sm:p-8">
             <div class="flex flex-col sm:flex-row gap-5">
                 <div class="w-full sm:w-48 h-36 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center overflow-hidden">
-                    <img th:src="${post.resolvedThumbnailUrl}" th:alt="${post.title}" class="w-full h-full object-cover">
+                    <img th:src="${post.resolvedThumbnailUrl}" th:alt="${post.title}" class="w-full h-full object-contain">
                 </div>
                 <div class="flex-1">
                     <p class="text-sm font-semibold text-primary mb-2">Sản phẩm đang checkout</p>
@@ -62,14 +62,15 @@
             <section class="rounded-3xl bg-white border border-gray-100 shadow-sm p-6">
                 <h2 class="text-xl font-bold mb-4">Điều gì sẽ xảy ra tiếp theo?</h2>
                 <ol class="space-y-3 text-sm text-gray-600">
-                    <li>1. TrustBridge tạo giao dịch mới ở trạng thái <strong>Pending</strong>.</li>
-                    <li>2. Bài đăng được chuyển sang trạng thái <strong>Holding</strong>.</li>
-                    <li>3. Bạn theo dõi tiến độ ở trang lịch sử mua hàng.</li>
+                    <li>1. TrustBridge tạo đơn hàng ở trạng thái <strong>Awaiting Payment</strong>.</li>
+                    <li>2. Credential khả dụng sẽ được chuyển sang <strong>Holding</strong> để giữ chỗ cho bạn.</li>
+                    <li>3. Bạn được chuyển sang VNPAY để thanh toán.</li>
+                    <li>4. Chỉ sau khi IPN xác nhận thành công, escrow và bước giao credential mới được tiếp tục.</li>
                 </ol>
 
                 <form th:action="@{/buyer/checkout}" method="post" class="mt-6 space-y-3">
                     <input type="hidden" name="postId" th:value="${post.postId}">
-                    <button type="submit" class="w-full rounded-2xl bg-primary px-4 py-3 text-white font-bold hover:bg-primary-dark">Xác nhận tạo giao dịch</button>
+                    <button type="submit" class="w-full rounded-2xl bg-primary px-4 py-3 text-white font-bold hover:bg-primary-dark">Tiếp tục tới VNPAY</button>
                     <a th:href="@{/marketplace/{postId}(postId=${post.postId})}" class="block w-full rounded-2xl border border-gray-200 px-4 py-3 text-center font-bold text-gray-700 hover:bg-gray-50">Quay lại chi tiết sản phẩm</a>
                 </form>
             </section>

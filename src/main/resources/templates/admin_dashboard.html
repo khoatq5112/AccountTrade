@@ -1,10 +1,13 @@
 ﻿<!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="https://www.thymeleaf.org/thymeleaf-extras-springsecurity6">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TrustBridge Market | Admin Dashboard</title>
+    <!-- CSRF Meta Tags -->
+    <meta name="_csrf" th:content="${_csrf != null ? _csrf.token : ''}" />
+    <meta name="_csrf_header" th:content="${_csrf != null ? _csrf.headerName : ''}" />
     <!-- Google Fonts: Manrope -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -41,6 +44,8 @@
         .btn-primary { @apply bg-primary text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-blue-600; }
         .btn-outline { @apply border border-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg transition-colors duration-200 hover:bg-gray-50; }
         .card { @apply bg-white rounded-xl shadow-soft border border-gray-100 p-6; }
+        .skeleton { @apply animate-pulse bg-gray-200 rounded; }
+        .hidden { display: none !important; }
     </style>
     <!-- Chart.js for analytics dashboard -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -48,39 +53,45 @@
 
 <body class="font-sans antialiased">
     <!-- Admin Navigation -->
-    <nav class="sticky top-0 z-50 bg-gray-900 shadow-sm border-b border-gray-800 text-white">
-        <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+    <nav class="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-20 items-center">
                 <div class="flex items-center">
-                    <a href="index.html" class="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                    <a th:href="@{/marketplace}" class="flex items-center gap-2 hover:opacity-80 transition-opacity">
                         <i class="ph-fill ph-shield-check text-primary text-3xl"></i>
-                        <span class="font-bold text-2xl tracking-tight">TrustBridge <span
-                                class="text-xs text-primary ml-1 uppercase bg-blue-900/50 px-2 py-1 rounded">Admin</span></span>
+                        <span class="font-bold text-2xl tracking-tight text-gray-900">TrustBridge <span
+                                class="text-xs text-primary ml-1 uppercase bg-blue-100 px-2 py-1 rounded">Admin</span></span>
                     </a>
+                    <div class="hidden md:flex ml-10 space-x-8">
+                        <a th:href="@{/admin/dashboard}"
+                            class="text-primary font-bold px-3 py-2 transition-colors border-b-2 border-primary">Dashboard</a>
+                        <a th:href="@{/admin/users}"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Users</a>
+                        <a th:href="@{/admin/posts}"
+                            class="text-gray-600 hover:text-primary font-bold px-3 py-2 transition-colors">Posts</a>
+                    </div>
                 </div>
                 <div class="flex items-center space-x-6">
-                    <div class="relative cursor-pointer hover:bg-gray-800 p-2 rounded-full transition-colors">
-                        <i class="ph-fill ph-bell text-xl"></i>
-                        <div class="absolute top-1 right-1 w-2.5 h-2.5 bg-error rounded-full border-2 border-gray-900">
-                        </div>
+                    <div class="relative cursor-pointer hover:bg-gray-100 p-2 rounded-full transition-colors">
+                        <i class="ph-fill ph-bell text-xl text-gray-600"></i>
+                        <div id="notification-badge" class="absolute top-1 right-1 w-2.5 h-2.5 bg-error rounded-full border-2 border-white"></div>
                     </div>
                     <div class="relative" id="userMenuWrapper">
                         <button id="userMenuBtn" onclick="toggleUserMenu()"
                             class="flex items-center gap-3 cursor-pointer group focus:outline-none">
-                            <div
-                                class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold shadow-soft group-hover:scale-105 transition-transform">
-                                ADMIN
+                            <div class="w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center font-bold shadow-soft group-hover:scale-105 transition-transform">
+                                AD
                             </div>
                             <div class="hidden md:block group-hover:opacity-80 transition-opacity text-left">
-                                <div class="text-sm font-bold leading-tight">System Admin</div>
-                                <div class="text-xs text-gray-400">Quản trị viên trưởng</div>
+                                <div class="text-sm font-bold text-gray-900 leading-tight">System Admin</div>
+                                <div class="text-xs text-gray-500">Quản trị viên</div>
                             </div>
                             <i class="ph ph-caret-down text-gray-400 text-sm"></i>
                         </button>
                         <!-- Dropdown -->
                         <div id="userMenu"
                             class="hidden absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
-                            <a href="/admin/dashboard"
+                            <a th:href="@{/admin/dashboard}"
                                 class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-bold">
                                 <i class="ph ph-squares-four"></i> Dashboard
                             </a>
@@ -99,48 +110,51 @@
     </nav>
 
     <!-- Dashboard Content -->
-    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="flex flex-col md:flex-row gap-8">
 
             <!-- Sidebar -->
             <aside class="w-full md:w-64 flex-shrink-0">
                 <div class="bg-white rounded-xl shadow-soft border border-gray-100 overflow-hidden sticky top-28">
+                    <div class="p-6 border-b border-gray-100 text-center">
+                        <div class="relative inline-block">
+                            <div class="w-20 h-20 mx-auto rounded-full bg-gray-900 text-white flex items-center justify-center font-bold text-2xl mb-3 shadow-md">
+                                AD
+                            </div>
+                            <div class="absolute bottom-3 right-0 w-4 h-4 bg-success border-2 border-white rounded-full"></div>
+                        </div>
+                        <h2 class="font-bold text-lg text-gray-900">System Admin</h2>
+                        <div class="flex items-center justify-center gap-1 text-sm text-success mt-1">
+                            <i class="ph-fill ph-shield-check"></i> Full Access
+                        </div>
+                    </div>
                     <nav class="p-4 space-y-1">
-                        <div class="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Hệ thống Hệ Sinh
-                            Thái</div>
-                        <a href="#"
+                        <div class="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Hệ thống</div>
+                        <a th:href="@{/admin/dashboard}"
                             class="flex items-center gap-3 px-4 py-3 bg-blue-50 text-primary font-bold rounded-lg transition-colors">
                             <i class="ph-fill ph-squares-four text-lg"></i> Tổng quan
                         </a>
-                        <a href="#"
+                        <a th:href="@{/admin/users}"
                             class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
                             <i class="ph ph-users text-lg"></i> Quản lý người dùng
                         </a>
-                        <a href="#"
+                        <a th:href="@{/admin/posts}"
                             class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
                             <i class="ph ph-list-checks text-lg"></i> Kiểm duyệt sản phẩm
                         </a>
-                        <div class="mt-6 mb-2 px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Tài
-                            chính & Rủi ro</div>
-                        <a href="#"
+                        <div class="mt-4 px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Tài chính</div>
+                        <a th:href="@{/admin/wallets}"
                             class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
-                            <i class="ph ph-bank text-lg"></i> Quản lý ví tín dụng
+                            <i class="ph ph-bank text-lg"></i> Quản lý ví
                         </a>
-                        <a href="#"
+                        <a th:href="@{/admin/transactions}"
                             class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
-                            <i class="ph ph-swap text-lg"></i> Lịch sử thu thập phí
+                            <i class="ph ph-swap text-lg"></i> Lịch sử giao dịch
                         </a>
-                        <a href="disputes.html"
-                            class="flex items-center justify-between px-4 py-3 text-error hover:bg-red-50 font-bold rounded-lg transition-colors mt-2 border border-transparent hover:border-red-100">
-                            <div class="flex items-center gap-3"><i class="ph ph-gavel text-lg"></i> Giải quyết khiếu
-                                nại</div>
-                            <span class="bg-error text-white text-xs px-2 py-0.5 rounded-full">3</span>
-                        </a>
-                        <div class="mt-6 mb-2 px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Hệ
-                            thống</div>
-                        <a href="settings.html"
-                            class="flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 font-bold rounded-lg transition-colors">
-                            <i class="ph ph-gear text-lg"></i> Cài đặt nền tảng
+                        <a th:href="@{/admin/disputes}"
+                            class="flex items-center justify-between px-4 py-3 text-error hover:bg-red-50 font-bold rounded-lg transition-colors mt-4 border border-transparent hover:border-red-100">
+                            <div class="flex items-center gap-3"><i class="ph ph-gavel text-lg"></i> Khiếu nại</div>
+                            <span id="sidebar-dispute-count" class="bg-error text-white text-xs px-2 py-0.5 rounded-full">0</span>
                         </a>
                     </nav>
                 </div>
@@ -152,67 +166,79 @@
                 <div class="flex justify-between items-center mb-2">
                     <h1 class="text-2xl font-bold text-gray-900">Bảng điều khiển Quản trị</h1>
                     <div class="flex gap-2">
-                        <button class="btn-outline flex items-center gap-2 bg-white"><i
-                                class="ph-bold ph-download-simple"></i> Xuất báo cáo</button>
+                        <button onclick="AdminDashboard.refresh()" class="btn-outline flex items-center gap-2 bg-white">
+                            <i class="ph-bold ph-arrow-clockwise"></i> Làm mới
+                        </button>
+                        <button class="btn-primary flex items-center gap-2"><i class="ph-bold ph-download-simple"></i> Xuất báo cáo</button>
                     </div>
                 </div>
 
                 <!-- Metrics Grid -->
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <!-- Total Platform Volume -->
-                    <div
-                        class="card bg-gray-900 text-white border-0 relative overflow-hidden hover-lift hover:shadow-lg transition-shadow">
+                    <div class="card bg-gray-900 text-white border-0 relative overflow-hidden hover-lift hover:shadow-lg transition-shadow">
                         <div class="absolute -top-4 -right-4 p-4 opacity-10 transform rotate-12">
                             <i class="ph-fill ph-chart-line-up" style="font-size: 8rem;"></i>
                         </div>
                         <h3 class="text-gray-400 text-sm font-bold mb-1 relative z-10">Khối lượng giao dịch (24h)</h3>
-                        <div class="text-3xl font-bold mb-2 relative z-10 tracking-tight">1.062.500.000 ₫</div>
-                        <div class="flex items-center gap-1 text-success text-sm font-bold relative z-10">
-                            <i class="ph-bold ph-trend-up"></i> +12.5%
+                        <!-- Loading State -->
+                        <div id="stats-loading" class="space-y-2">
+                            <div class="skeleton h-8 w-48 bg-gray-700"></div>
+                            <div class="skeleton h-4 w-16 bg-gray-700"></div>
                         </div>
+                        <!-- Content -->
+                        <div id="stats-content" class="hidden">
+                            <div id="stat-volume" class="text-3xl font-bold mb-2 relative z-10 tracking-tight">0₫</div>
+                            <div id="stat-volume-trend" class="flex items-center gap-1 text-success text-sm font-bold relative z-10">
+                                <i class="ph-bold ph-trend-up"></i> +0%
+                            </div>
+                        </div>
+                        <!-- Error State -->
+                        <div id="stats-error" class="hidden"></div>
                     </div>
 
                     <!-- Escrow Holdings -->
-                    <div class="card flex flex-col justify-center hover-lift border-primary/20 bg-blue-50/50">
-                        <div class="flex items-center justify-between mb-2">
-                            <div
-                                class="w-10 h-10 rounded-full bg-blue-100 text-primary flex items-center justify-center">
-                                <i class="ph-fill ph-lock-key text-xl"></i>
+                    <div class="card flex flex-col justify-center hover-lift border-orange-100 bg-orange-50/30">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 rounded-full bg-orange-100 text-warning flex items-center justify-center shadow-sm">
+                                <i class="ph-fill ph-lock-key text-2xl"></i>
                             </div>
+                            <span id="stat-escrow-badge" class="text-xs font-bold text-orange-700 bg-orange-100 px-2.5 py-1 rounded-full border border-orange-200">
+                                0 Orders
+                            </span>
                         </div>
                         <h3 class="text-gray-500 text-sm font-bold mb-1">Đang tạm giữ (Escrow)</h3>
-                        <div class="text-2xl font-bold text-gray-900">3.125.000.000 ₫</div>
-                        <div class="text-xs text-gray-500 mt-1">450 giao dịch</div>
+                        <div id="stat-escrow" class="text-3xl font-bold text-gray-900">0₫</div>
+                        <div id="stat-escrow-count" class="text-xs text-gray-500 mt-1">0 giao dịch</div>
                     </div>
 
                     <!-- Platform Fee Revenue -->
                     <div class="card flex flex-col justify-center hover-lift border-green-100 bg-green-50/30">
-                        <div class="flex items-center justify-between mb-2">
-                            <div
-                                class="w-10 h-10 rounded-full bg-green-100 text-success flex items-center justify-center">
-                                <i class="ph-fill ph-coin text-xl"></i>
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 rounded-full bg-green-100 text-success flex items-center justify-center shadow-sm">
+                                <i class="ph-fill ph-coin text-2xl"></i>
                             </div>
                         </div>
                         <h3 class="text-gray-500 text-sm font-bold mb-1">Doanh thu phí (Tháng)</h3>
-                        <div class="text-2xl font-bold text-gray-900">385.500.000 ₫</div>
-                        <div class="text-xs text-green-600 mt-1 font-bold">+5.2% so với tháng trước</div>
+                        <div id="stat-revenue" class="text-3xl font-bold text-gray-900">0₫</div>
+                        <div id="stat-revenue-trend" class="text-xs text-green-600 mt-1 font-bold">+0% so với tháng trước</div>
                     </div>
 
                     <!-- Alerts -->
                     <div class="card flex flex-col justify-center hover-lift border-red-100 bg-red-50/30">
-                        <div class="flex items-center justify-between mb-2">
-                            <div class="w-10 h-10 rounded-full bg-red-100 text-error flex items-center justify-center">
-                                <i class="ph-fill ph-warning-circle text-xl"></i>
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 rounded-full bg-red-100 text-error flex items-center justify-center shadow-sm">
+                                <i class="ph-fill ph-warning-circle text-2xl"></i>
                             </div>
                         </div>
                         <h3 class="text-gray-500 text-sm font-bold mb-1">Cảnh báo / Cần xử lý</h3>
                         <div class="flex gap-4">
                             <div>
-                                <div class="text-2xl font-bold text-error">3</div>
+                                <div id="stat-dispute-count" class="text-2xl font-bold text-error">0</div>
                                 <div class="text-xs text-error font-bold">Khiếu nại</div>
                             </div>
                             <div>
-                                <div class="text-2xl font-bold text-warning">12</div>
+                                <div id="stat-approval-count" class="text-2xl font-bold text-warning">0</div>
                                 <div class="text-xs text-warning font-bold">Chờ duyệt</div>
                             </div>
                         </div>
@@ -225,75 +251,83 @@
                     <div class="card lg:col-span-2">
                         <div class="flex justify-between items-center mb-6">
                             <h2 class="text-xl font-bold text-gray-900">Khối lượng giao dịch toàn sàn</h2>
-                            <select
+                            <select id="chart-period" onchange="AdminDashboard.loadChartData(this.value)"
                                 class="text-sm font-bold text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
-                                <option>7 ngày qua</option>
-                                <option>30 ngày qua</option>
+                                <option value="7">7 ngày qua</option>
+                                <option value="30">30 ngày qua</option>
                             </select>
                         </div>
-                        <div class="h-64 flex items-center justify-center p-4">
-                            <!-- Chart Container -->
+                        <!-- Loading State -->
+                        <div id="chart-loading" class="h-64 flex items-center justify-center">
+                            <div class="text-center">
+                                <i class="ph ph-spinner ph-spin text-4xl text-gray-400"></i>
+                                <p class="text-gray-500 mt-2">Đang tải dữ liệu...</p>
+                            </div>
+                        </div>
+                        <!-- Chart Container -->
+                        <div id="chart-content" class="h-64 flex items-center justify-center p-4 hidden">
                             <canvas id="platformVolumeChart"></canvas>
                         </div>
+                        <!-- Error State -->
+                        <div id="chart-error" class="h-64 flex items-center justify-center hidden"></div>
                     </div>
 
                     <!-- Pending Approvals -->
                     <div class="card lg:col-span-1">
                         <div class="flex justify-between items-center mb-6">
                             <h2 class="text-lg font-bold text-gray-900">Sản phẩm chờ duyệt</h2>
-                            <a href="#" class="text-sm font-bold text-primary hover:underline">Xem tất cả</a>
+                            <a th:href="@{/admin/posts}" class="text-sm font-bold text-primary hover:underline">Xem tất cả</a>
                         </div>
-                        <div class="space-y-4">
-                            <!-- Item 1 -->
-                            <div
-                                class="flex items-start gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50 hover:bg-white transition-colors cursor-pointer group">
-                                <div class="w-10 h-10 rounded bg-gray-200 flex items-center justify-center shrink-0">
-                                    <i class="ph-fill ph-game-controller text-gray-400"></i>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <div class="text-sm font-bold text-gray-900 truncate">CS:GO Prime Acc (Global)</div>
-                                    <div class="text-xs text-gray-500">Bởi: <span class="text-primary">GamerX</span> •
-                                        3.750.000 ₫</div>
-                                </div>
-                                <div class="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button class="text-success hover:text-green-700 bg-green-100 p-1 rounded"><i
-                                            class="ph-bold ph-check"></i></button>
-                                </div>
-                            </div>
-                            <!-- Item 2 -->
-                            <div
-                                class="flex items-start gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50 hover:bg-white transition-colors cursor-pointer group">
-                                <div class="w-10 h-10 rounded bg-gray-200 flex items-center justify-center shrink-0">
-                                    <i class="ph-fill ph-discord-logo text-gray-400"></i>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <div class="text-sm font-bold text-gray-900 truncate">Nitro + 2 Boosts (1 Yr)</div>
-                                    <div class="text-xs text-gray-500">Bởi: <span
-                                            class="text-primary">DiscordSeller</span> • 1.125.000 ₫</div>
-                                </div>
-                                <div class="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button class="text-success hover:text-green-700 bg-green-100 p-1 rounded"><i
-                                            class="ph-bold ph-check"></i></button>
-                                </div>
-                            </div>
-                            <!-- Item 3 -->
-                            <div
-                                class="flex items-start gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50 hover:bg-white transition-colors cursor-pointer group">
-                                <div class="w-10 h-10 rounded bg-gray-200 flex items-center justify-center shrink-0">
-                                    <i class="ph-fill ph-envelope text-gray-400"></i>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <div class="text-sm font-bold text-gray-900 truncate">Gmail Aged 2012 HQ</div>
-                                    <div class="text-xs text-gray-500">Bởi: <span class="text-primary">MailFarm</span> •
-                                        500.000 ₫</div>
-                                </div>
-                                <div class="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button class="text-success hover:text-green-700 bg-green-100 p-1 rounded"><i
-                                            class="ph-bold ph-check"></i></button>
-                                </div>
-                            </div>
+                        <!-- Loading State -->
+                        <div id="pending-posts-loading" class="text-center py-8">
+                            <i class="ph ph-spinner ph-spin text-2xl text-gray-400"></i>
                         </div>
+                        <!-- Content -->
+                        <div id="pending-posts-content" class="space-y-4 hidden"></div>
+                        <!-- Error State -->
+                        <div id="pending-posts-error" class="hidden"></div>
                     </div>
+                </div>
+
+                <!-- User Management Section -->
+                <div class="card">
+                    <div class="flex justify-between items-center mb-6">
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-xl font-bold text-gray-900">Quản lý người dùng</h2>
+                            <span id="user-count-badge" class="bg-primary text-white text-xs font-bold px-2 py-0.5 rounded-full">0 users</span>
+                        </div>
+                        <a th:href="@{/admin/users}"
+                            class="text-sm font-bold text-primary hover:text-blue-700 hover:underline flex items-center gap-1">
+                            Xem tất cả <i class="ph-bold ph-arrow-right"></i>
+                        </a>
+                    </div>
+
+                    <!-- Loading State -->
+                    <div id="users-loading" class="text-center py-8">
+                        <i class="ph ph-spinner ph-spin text-2xl text-gray-400"></i>
+                    </div>
+
+                    <!-- Content -->
+                    <div id="users-content" class="overflow-x-auto hidden">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b-2 border-gray-100 text-xs uppercase tracking-wider text-gray-500">
+                                    <th class="py-3 px-4 font-bold">Người dùng</th>
+                                    <th class="py-3 px-4 font-bold">Email</th>
+                                    <th class="py-3 px-4 font-bold">Vai trò</th>
+                                    <th class="py-3 px-4 font-bold">Trạng thái</th>
+                                    <th class="py-3 px-4 font-bold">Ngày đăng ký</th>
+                                    <th class="py-3 px-4 font-bold text-right">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body" class="divide-y divide-gray-100">
+                                <!-- Dynamic content loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Error State -->
+                    <div id="users-error" class="hidden"></div>
                 </div>
 
                 <!-- Dispute Center Preview -->
@@ -303,12 +337,18 @@
                             <h2 class="text-xl font-bold text-gray-900">Khiếu nại cần xử lý</h2>
                             <span class="bg-error text-white text-xs font-bold px-2 py-0.5 rounded-full">Khẩn cấp</span>
                         </div>
-                        <a href="#"
+                        <a th:href="@{/admin/disputes}"
                             class="text-sm font-bold text-error hover:text-red-700 hover:underline flex items-center gap-1">Đến
                             trung tâm giải quyết <i class="ph-bold ph-arrow-right"></i></a>
                     </div>
 
-                    <div class="overflow-x-auto">
+                    <!-- Loading State -->
+                    <div id="disputes-loading" class="text-center py-8">
+                        <i class="ph ph-spinner ph-spin text-2xl text-gray-400"></i>
+                    </div>
+
+                    <!-- Content -->
+                    <div id="disputes-content" class="overflow-x-auto hidden">
                         <table class="w-full text-left border-collapse">
                             <thead>
                                 <tr class="border-b-2 border-gray-100 text-xs uppercase tracking-wider text-gray-500">
@@ -319,130 +359,32 @@
                                     <th class="py-3 px-4 font-bold text-right">Thao tác</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-gray-100">
-                                <tr class="hover:bg-red-50/50 transition-colors group">
-                                    <td class="py-4 px-4">
-                                        <div class="font-mono text-sm font-bold text-gray-900">#TRX-8241</div>
-                                        <div class="text-sm font-bold text-primary">11.250.000 ₫</div>
-                                    </td>
-                                    <td class="py-4 px-4">
-                                        <div class="font-bold text-gray-900 text-sm">Tài khoản bị khóa sau 2 giờ</div>
-                                        <div class="text-xs text-gray-500 mt-1 max-w-xs truncate">Người mua báo cáo tài
-                                            khoản Riot đã bị đổi pass lại bởi người bán...</div>
-                                    </td>
-                                    <td class="py-4 px-4">
-                                        <div class="flex items-center gap-2 text-sm">
-                                            <span class="font-bold text-gray-900">UserABC</span>
-                                            <i class="ph-bold ph-arrow-right text-gray-400"></i>
-                                            <span class="font-bold text-gray-900">ProGamer99</span>
-                                        </div>
-                                    </td>
-                                    <td class="py-4 px-4">
-                                        <span class="text-xs font-bold text-error"><i class="ph-bold ph-clock"></i> 2
-                                            giờ trước</span>
-                                    </td>
-                                    <td class="py-4 px-4 text-right">
-                                        <button
-                                            class="text-xs font-bold bg-error text-white px-3 py-2 rounded shadow-sm hover:bg-red-600">Can
-                                            thiệp</button>
-                                    </td>
-                                </tr>
+                            <tbody id="disputes-table-body" class="divide-y divide-gray-100">
+                                <!-- Dynamic content loaded here -->
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- Error State -->
+                    <div id="disputes-error" class="hidden"></div>
                 </div>
 
             </main>
         </div>
     </div>
 
-    <!-- Chart Configuration Script -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const ctx = document.getElementById('platformVolumeChart').getContext('2d');
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center text-sm text-gray-500 border-t border-gray-800 pt-8">
+            <div class="flex items-center gap-2 mb-4 md:mb-0">
+                <i class="ph-fill ph-shield-check text-primary text-2xl"></i>
+                <span class="font-bold text-lg tracking-tight text-gray-300">TrustBridge Market</span>
+            </div>
+            <p>&copy; 2026 TrustBridge Market. Protected by escrow transaction system.</p>
+        </div>
+    </footer>
 
-            // Gradient for chart
-            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-            gradient.addColorStop(0, 'rgba(19, 127, 236, 0.5)'); // primary blue
-            gradient.addColorStop(1, 'rgba(19, 127, 236, 0.05)');
-
-            const volumeChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                    datasets: [{
-                        label: 'Khối lượng ($)',
-                        data: [25000, 32000, 28000, 39000, 42000, 45000, 41000],
-                        borderColor: '#137fec',
-                        backgroundColor: gradient,
-                        borderWidth: 3,
-                        pointBackgroundColor: '#fff',
-                        pointBorderColor: '#137fec',
-                        pointBorderWidth: 2,
-                        pointRadius: 4,
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            backgroundColor: '#1a1a1a',
-                            titleFont: { family: 'Manrope', size: 13 },
-                            bodyFont: { family: 'Manrope', size: 14, weight: 'bold' },
-                            padding: 12,
-                            displayColors: false,
-                            callbacks: {
-                                label: function (context) {
-                                    let label = context.dataset.label || '';
-                                    if (label) {
-                                        label += ': ';
-                                    }
-                                    if (context.parsed.y !== null) {
-                                        label += new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(context.parsed.y);
-                                    }
-                                    return label;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: {
-                                color: '#f5f7fa',
-                                drawBorder: false
-                            },
-                            ticks: {
-                                font: { family: 'Manrope', size: 12 },
-                                color: '#9ca3af',
-                                callback: function (value) {
-                                    return '$' + (value / 1000) + 'k';
-                                }
-                            },
-                            border: { display: false }
-                        },
-                        x: {
-                            grid: {
-                                display: false,
-                                drawBorder: false
-                            },
-                            ticks: {
-                                font: { family: 'Manrope', size: 12, weight: 'bold' },
-                                color: '#6b7280'
-                            },
-                            border: { display: false }
-                        }
-                    }
-                }
-            });
-        });
-    </script>
+    <!-- User Menu Toggle Script -->
     <script>
         function toggleUserMenu() {
             document.getElementById('userMenu').classList.toggle('hidden');
@@ -452,6 +394,14 @@
             if (wrapper && !wrapper.contains(e.target)) {
                 document.getElementById('userMenu').classList.add('hidden');
             }
+        });
+    </script>
+    
+    <!-- Admin Dashboard Module -->
+    <script src="/js/admin-dashboard.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            AdminDashboard.init();
         });
     </script>
 </body>
