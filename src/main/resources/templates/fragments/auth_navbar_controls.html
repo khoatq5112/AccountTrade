@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<body>
+<div th:fragment="controls" class="flex items-center space-x-6">
+    <a th:href="${navbarWalletPath}"
+       class="hidden sm:flex items-center gap-2 text-sm font-bold bg-blue-50 text-primary py-1.5 px-3 rounded-full border border-blue-100 shadow-sm hover:bg-blue-100 transition-colors">
+        <i class="ph-fill ph-wallet"></i>
+        <span th:text="${#numbers.formatDecimal(navbarWalletBalance, 0, 'COMMA', 0, 'POINT')} + ' ₫'">0 ₫</span>
+    </a>
+
+    <div class="relative" data-navbar-notifications="true"
+         th:attr="data-initial-unread=${navbarUnreadNotificationCount},data-csrf-token=${_csrf != null ? _csrf.token : ''},data-csrf-header=${_csrf != null ? _csrf.headerName : ''}">
+        <button type="button"
+                class="relative cursor-pointer hover:bg-gray-100 p-2 rounded-full transition-colors"
+                data-notification-bell
+                aria-label="Thông báo">
+            <i class="ph-fill ph-bell text-xl text-gray-600"></i>
+            <span class="hidden absolute -top-1 -right-1 min-w-[1.25rem] h-5 px-1 rounded-full bg-error text-white text-[10px] font-bold items-center justify-center border-2 border-white"
+                  data-notification-badge>0</span>
+        </button>
+
+        <div class="hidden absolute right-0 mt-3 w-[22rem] max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden"
+             data-notification-dropdown>
+            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <div>
+                    <div class="text-sm font-extrabold text-gray-900">Thông báo</div>
+                    <div class="text-xs text-gray-500">Cập nhật mới nhất của bạn</div>
+                </div>
+                <button type="button"
+                        class="text-xs font-bold text-primary hover:text-blue-700 transition-colors"
+                        data-mark-all-read>
+                    Đánh dấu đã đọc tất cả
+                </button>
+            </div>
+
+            <div class="max-h-96 overflow-y-auto">
+                <div class="px-4 py-10 text-center text-sm text-gray-500" data-notification-loading>
+                    Đang tải thông báo...
+                </div>
+                <div class="hidden px-4 py-10 text-center text-sm text-gray-500" data-notification-empty>
+                    Bạn chưa có thông báo nào.
+                </div>
+                <div class="divide-y divide-gray-100" data-notification-list></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="relative" id="userMenuWrapper">
+        <button id="userMenuBtn"
+                type="button"
+                class="flex items-center gap-3 cursor-pointer group focus:outline-none"
+                data-user-menu-toggle>
+            <div class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold shadow-soft group-hover:scale-105 transition-transform">
+                <span th:text="${navbarUserInitials}">TB</span>
+            </div>
+            <div class="hidden md:block group-hover:opacity-80 transition-opacity text-left">
+                <div class="text-sm font-bold text-gray-900 leading-tight" th:text="${currentUser.username}">Username</div>
+                <div class="text-xs text-gray-500" th:text="${navbarRoleLabel}">Người dùng</div>
+            </div>
+            <i class="ph ph-caret-down text-gray-400 text-sm"></i>
+        </button>
+
+        <div id="userMenu"
+             class="hidden absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50"
+             data-user-menu>
+            <a th:href="${navbarHomePath}"
+               class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-bold">
+                <i class="ph ph-squares-four"></i>
+                <span>Dashboard</span>
+            </a>
+            <a th:href="${navbarWalletPath}"
+               class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-bold">
+                <i class="ph ph-wallet"></i>
+                <span>Ví của tôi</span>
+            </a>
+            <div class="border-t border-gray-100 my-1"></div>
+            <form th:action="@{/logout}" method="POST">
+                <button type="submit"
+                        class="w-full flex items-center gap-2 px-4 py-2 text-sm text-error hover:bg-red-50 font-bold text-left">
+                    <i class="ph ph-sign-out"></i>
+                    <span>Đăng xuất</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script th:src="@{/js/navbar-notifications.js}" defer></script>
+</div>
+</body>
+</html>

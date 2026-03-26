@@ -38,7 +38,7 @@ public class NotificationPreference {
      */
     @Column(name = "email_enabled")
     @Builder.Default
-    private Boolean emailEnabled = true;
+    private Boolean emailEnabled = false;
 
     /**
      * Whether to receive digest emails instead of instant.

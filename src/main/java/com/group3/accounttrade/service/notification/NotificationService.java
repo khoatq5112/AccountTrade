@@ -9,11 +9,9 @@ import com.group3.accounttrade.entity.NotificationTemplate;
 import com.group3.accounttrade.entity.User;
 import com.group3.accounttrade.event.NotificationEvent;
 import com.group3.accounttrade.repository.NotificationDeliveryLogRepository;
-import com.group3.accounttrade.repository.NotificationPreferenceRepository;
 import com.group3.accounttrade.repository.NotificationRepository;
 import com.group3.accounttrade.repository.NotificationTemplateRepository;
 import com.group3.accounttrade.repository.UserRepository;
-import com.group3.accounttrade.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -24,14 +22,12 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Central notification service for in-app and email delivery.
+ * Central notification service for in-app delivery.
  */
 @Service
 @RequiredArgsConstructor
@@ -41,10 +37,8 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final NotificationTemplateRepository templateRepository;
     private final NotificationDeliveryLogRepository deliveryLogRepository;
-    private final NotificationPreferenceRepository preferenceRepository;
     private final NotificationPreferenceService preferenceService;
     private final UserRepository userRepository;
-    private final EmailService emailService;
 
     @EventListener
     public void handleNotificationEvent(NotificationEvent event) {
@@ -123,8 +117,7 @@ public class NotificationService {
 
             NotificationPreference preference = preferenceService.getOrCreateDefaultPreferences(recipient);
             boolean inAppEnabled = isChannelEnabled(preference, notificationCategory, false);
-            boolean emailEnabled = isChannelEnabled(preference, notificationCategory, true);
-            if (!inAppEnabled && !emailEnabled) {
+            if (!inAppEnabled) {
                 log.debug("Skipping notification because all channels are disabled for user {}", recipient.getUserId());
                 return null;
             }
@@ -149,9 +142,6 @@ public class NotificationService {
 
             if (inAppEnabled) {
                 logDeliverySuccess(notification, NotificationDeliveryLog.CHANNEL_IN_APP);
-            }
-            if (emailEnabled) {
-                queueEmailDelivery(notification, recipient);
             }
 
             return notification;
@@ -247,26 +237,19 @@ public class NotificationService {
     @Transactional(readOnly = true)
     public Map<String, Object> getAdminStats() {
         Map<String, Object> stats = new LinkedHashMap<>();
+        Map<String, Long> byChannel = toCountMap(deliveryLogRepository.countByChannel());
+        byChannel.put(NotificationDeliveryLog.CHANNEL_EMAIL, 0L);
         stats.put("totalSent", notificationRepository.count());
         stats.put("byType", toCountMap(notificationRepository.countByType()));
-        stats.put("byChannel", toCountMap(deliveryLogRepository.countByChannel()));
-        stats.put("failedCount", deliveryLogRepository.countByStatus(NotificationDeliveryLog.STATUS_FAILED));
-        stats.put("pendingEmailCount", notificationRepository.countByEmailSentFalse());
+        stats.put("byChannel", byChannel);
+        stats.put("failedCount", 0L);
+        stats.put("pendingEmailCount", 0L);
         return stats;
     }
 
     @Transactional
     public int retryFailedEmailNotifications() {
-        int retried = 0;
-        for (NotificationDeliveryLog logEntry : deliveryLogRepository.findByStatus(NotificationDeliveryLog.STATUS_FAILED)) {
-            Notification notification = logEntry.getNotification();
-            if (notification == null || notification.getUser() == null || notification.getUser().getEmail() == null) {
-                continue;
-            }
-            queueEmailDelivery(notification, notification.getUser());
-            retried++;
-        }
-        return retried;
+        return 0;
     }
 
     @Transactional
@@ -299,40 +282,12 @@ public class NotificationService {
         return recipients.size();
     }
 
-    public void queueEmailDelivery(Notification notification, User recipient) {
-        try {
-            if (recipient.getEmail() == null || recipient.getEmail().isBlank()) {
-                return;
-            }
-
-            NotificationPreference preference = preferenceRepository.findByUser_UserId(recipient.getUserId())
-                    .orElseGet(() -> preferenceService.getOrCreateDefaultPreferences(recipient));
-
-            if (!Boolean.TRUE.equals(preference.getEmailEnabled()) || isInQuietHours(preference)) {
-                return;
-            }
-
-            emailService.sendSimpleEmail(recipient.getEmail(), notification.getTitle(), notification.getMessage());
-            notification.setEmailSent(true);
-            notification.setEmailSentAt(LocalDateTime.now());
-            notification.setEmailError(null);
-            notificationRepository.save(notification);
-            logDeliverySuccess(notification, NotificationDeliveryLog.CHANNEL_EMAIL);
-        } catch (Exception e) {
-            notification.setEmailSent(false);
-            notification.setEmailError(e.getMessage());
-            notificationRepository.save(notification);
-            log.error("Failed to send email notification {}", notification.getNotificationId(), e);
-            logDeliveryFailure(notification, NotificationDeliveryLog.CHANNEL_EMAIL, e.getMessage());
-        }
-    }
-
     private boolean isChannelEnabled(NotificationPreference preference, String category, boolean emailChannel) {
         if (preference == null) {
             return true;
         }
 
-        if (emailChannel && !Boolean.TRUE.equals(preference.getEmailEnabled())) {
+        if (emailChannel) {
             return false;
         }
 
@@ -345,28 +300,6 @@ public class NotificationService {
             return true;
         }
         return emailChannel ? channelPreference.isEmail() : channelPreference.isInApp();
-    }
-
-    private boolean isInQuietHours(NotificationPreference preference) {
-        if (preference == null
-                || !Boolean.TRUE.equals(preference.getQuietHoursEnabled())
-                || preference.getQuietHoursStart() == null
-                || preference.getQuietHoursEnd() == null) {
-            return false;
-        }
-
-        ZoneId zoneId = ZoneId.of(firstNonBlank(preference.getQuietHoursTimezone(), "Asia/Saigon"));
-        LocalTime now = LocalTime.now(zoneId);
-        LocalTime start = preference.getQuietHoursStart();
-        LocalTime end = preference.getQuietHoursEnd();
-
-        if (start.equals(end)) {
-            return true;
-        }
-        if (start.isBefore(end)) {
-            return !now.isBefore(start) && now.isBefore(end);
-        }
-        return !now.isBefore(start) || now.isBefore(end);
     }
 
     private String generateTitle(NotificationTemplate template, NotificationEvent event) {
@@ -405,16 +338,6 @@ public class NotificationService {
                 .channel(channel)
                 .status(NotificationDeliveryLog.STATUS_SENT)
                 .deliveredAt(LocalDateTime.now())
-                .build());
-    }
-
-    private void logDeliveryFailure(Notification notification, String channel, String errorMessage) {
-        deliveryLogRepository.save(NotificationDeliveryLog.builder()
-                .notification(notification)
-                .channel(channel)
-                .status(NotificationDeliveryLog.STATUS_FAILED)
-                .errorMessage(errorMessage)
-                .nextRetryAt(LocalDateTime.now().plusMinutes(10))
                 .build());
     }
 

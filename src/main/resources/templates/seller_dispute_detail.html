@@ -71,40 +71,7 @@
                             class="bg-red-50 text-error font-bold px-3 py-2 rounded-lg transition-colors">Khiếu nại</a>
                     </div>
                 </div>
-                <div class="flex items-center space-x-6">
-                    <div class="relative cursor-pointer hover:bg-gray-100 p-2 rounded-full transition-colors">
-                        <i class="ph-fill ph-bell text-xl text-gray-600"></i>
-                        <div class="absolute top-1 right-1 w-2.5 h-2.5 bg-error rounded-full border-2 border-white"></div>
-                    </div>
-                    <div class="relative" id="userMenuWrapper">
-                        <button id="userMenuBtn" onclick="toggleUserMenu()"
-                            class="flex items-center gap-3 cursor-pointer group focus:outline-none">
-                            <div class="w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center font-bold shadow-soft group-hover:scale-105 transition-transform">
-                                <span th:text="${#authentication.principal.username}">SL</span>
-                            </div>
-                            <div class="hidden md:block group-hover:opacity-80 transition-opacity text-left">
-                                <div class="text-sm font-bold text-gray-900 leading-tight" th:text="${currentUser.username}"></div>
-                                <div class="text-xs text-gray-500">Seller</div>
-                            </div>
-                            <i class="ph ph-caret-down text-gray-400 text-sm"></i>
-                        </button>
-                        <!-- Dropdown -->
-                        <div id="userMenu"
-                            class="hidden absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
-                            <a th:href="@{/seller/dashboard}"
-                                class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-bold">
-                                <i class="ph ph-squares-four"></i> Dashboard
-                            </a>
-                            <div class="border-t border-gray-100 my-1"></div>
-                            <form action="/logout" method="POST">
-                                <button type="submit"
-                                    class="w-full flex items-center gap-2 px-4 py-2 text-sm text-error hover:bg-red-50 font-bold text-left">
-                                    <i class="ph ph-sign-out"></i> Đăng xuất
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
+                <div th:replace="~{fragments/auth_navbar_controls :: controls}"></div>
             </div>
         </div>
     </nav>

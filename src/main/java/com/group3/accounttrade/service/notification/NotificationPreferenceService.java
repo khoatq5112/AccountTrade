@@ -45,7 +45,7 @@ public class NotificationPreferenceService {
     @Transactional
     public NotificationPreferenceDTO updatePreferences(User user, NotificationPreferenceDTO request) {
         NotificationPreference preference = getOrCreateDefaultPreferences(user);
-        preference.setEmailEnabled(request.isEmailEnabled());
+        preference.setEmailEnabled(false);
         preference.setDigestEnabled(request.isDigestEnabled());
         preference.setDigestFrequency(request.getDigestFrequency());
         preference.setQuietHoursEnabled(request.isQuietHoursEnabled());
@@ -89,7 +89,7 @@ public class NotificationPreferenceService {
     private NotificationPreference buildDefaultPreferences(User user) {
         return NotificationPreference.builder()
                 .user(user)
-                .emailEnabled(true)
+                .emailEnabled(false)
                 .digestEnabled(false)
                 .digestFrequency(NotificationPreference.DIGEST_INSTANT)
                 .categoryPreferences(defaultCategoryPreferences(user))
@@ -104,22 +104,22 @@ public class NotificationPreferenceService {
         String roleName = user.getRole() != null ? user.getRole().getRoleName() : "";
         Map<String, NotificationPreference.ChannelPreference> defaults = new LinkedHashMap<>();
 
-        defaults.put(NotificationPreference.CATEGORY_ORDER, channel(true, true));
-        defaults.put(NotificationPreference.CATEGORY_PAYMENT, channel(true, true));
-        defaults.put(NotificationPreference.CATEGORY_ESCROW, channel(true, true));
-        defaults.put(NotificationPreference.CATEGORY_CREDENTIAL, channel(true, true));
-        defaults.put(NotificationPreference.CATEGORY_DISPUTE, channel(true, true));
-        defaults.put(NotificationPreference.CATEGORY_SYSTEM, channel(true, true));
-        defaults.put(NotificationPreference.CATEGORY_WALLET, channel(true, true));
+        defaults.put(NotificationPreference.CATEGORY_ORDER, channel(false, true));
+        defaults.put(NotificationPreference.CATEGORY_PAYMENT, channel(false, true));
+        defaults.put(NotificationPreference.CATEGORY_ESCROW, channel(false, true));
+        defaults.put(NotificationPreference.CATEGORY_CREDENTIAL, channel(false, true));
+        defaults.put(NotificationPreference.CATEGORY_DISPUTE, channel(false, true));
+        defaults.put(NotificationPreference.CATEGORY_SYSTEM, channel(false, true));
+        defaults.put(NotificationPreference.CATEGORY_WALLET, channel(false, true));
 
         if ("Seller".equalsIgnoreCase(roleName)) {
-            defaults.put(NotificationPreference.CATEGORY_POST, channel(true, true));
+            defaults.put(NotificationPreference.CATEGORY_POST, channel(false, true));
             defaults.put(NotificationPreference.CATEGORY_REVIEW, channel(false, true));
             defaults.put(NotificationPreference.CATEGORY_PROMO, channel(false, true));
         } else if ("Admin".equalsIgnoreCase(roleName)) {
-            defaults.put(NotificationPreference.CATEGORY_USER, channel(true, true));
-            defaults.put(NotificationPreference.CATEGORY_POST, channel(true, true));
-            defaults.put(NotificationPreference.CATEGORY_REVIEW, channel(true, true));
+            defaults.put(NotificationPreference.CATEGORY_USER, channel(false, true));
+            defaults.put(NotificationPreference.CATEGORY_POST, channel(false, true));
+            defaults.put(NotificationPreference.CATEGORY_REVIEW, channel(false, true));
             defaults.put(NotificationPreference.CATEGORY_PROMO, channel(false, false));
         } else {
             defaults.put(NotificationPreference.CATEGORY_PROMO, channel(false, true));
@@ -137,8 +137,8 @@ public class NotificationPreferenceService {
             return copy;
         }
         source.forEach((key, value) -> copy.put(key, value == null
-                ? channel(true, true)
-                : channel(value.isEmail(), value.isInApp())));
+                ? channel(false, true)
+                : channel(false, value.isInApp())));
         return copy;
     }
 
