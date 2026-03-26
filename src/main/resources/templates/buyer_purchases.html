@@ -282,11 +282,13 @@
                                 </tr>
                             </thead>
                             <tbody id="ordersTableBody" class="divide-y divide-gray-100">
-                                <tr th:each="order : ${workflowOrders}" 
+                                <th:block th:each="order : ${workflowOrders}">
+                                <tr
                                     class="order-table-row hover:bg-gray-50 transition-colors"
                                     th:classappend="${highlightOrderId != null and order.orderId == highlightOrderId} ? ' bg-blue-50' : ''"
                                     th:attr="data-status=${order.orderStatus != null ? order.orderStatus.statusName : 'AWAITING_PAYMENT'},
-                                             data-search=${((order.orderNumber != null ? order.orderNumber : '') + ' ' + (!#lists.isEmpty(order.orderItems) ? order.orderItems[0].postTitleSnapshot : '') + ' ' + (!#lists.isEmpty(order.orderItems) and order.orderItems[0].seller != null ? order.orderItems[0].seller.username : ''))}">
+                                             data-search=${((order.orderNumber != null ? order.orderNumber : '') + ' ' + (!#lists.isEmpty(order.orderItems) ? order.orderItems[0].postTitleSnapshot : '') + ' ' + (!#lists.isEmpty(order.orderItems) and order.orderItems[0].seller != null ? order.orderItems[0].seller.username : ''))},
+                                             data-order-id=${order.orderId}">
                                     <!-- Order Number -->
                                     <td class="px-4 py-4">
                                         <p class="text-sm font-semibold text-primary" th:text="${'#' + order.orderNumber}">#12345</p>
@@ -345,6 +347,56 @@
                                         </div>
                                     </td>
                                 </tr>
+                                <tr th:if="${revealedCredentialsOrderId != null and order.orderId.equals(revealedCredentialsOrderId) and not #lists.isEmpty(revealedCredentials)}"
+                                    th:id="${'credentials-' + order.orderId}"
+                                    class="order-credentials-row bg-blue-50/30"
+                                    th:attr="data-credentials-for=${order.orderId}">
+                                    <td colspan="6" class="px-4 pb-5 pt-0">
+                                        <section class="rounded-xl border border-blue-100 bg-white p-6 shadow-soft">
+                                            <div class="flex items-center justify-between mb-4">
+                                                <div>
+                                                    <h3 class="text-lg font-bold text-gray-900">Credentials đã giao</h3>
+                                                    <p class="text-sm text-gray-500">Thông tin đăng nhập cho đơn hàng của bạn.</p>
+                                                </div>
+                                                <p class="text-xs text-gray-500 flex items-center gap-1">
+                                                    <i class="ph ph-info"></i> Lần xem này sẽ được ghi nhận.
+                                                </p>
+                                            </div>
+                                            <div class="space-y-4">
+                                                <article th:each="credentialView : ${revealedCredentials}"
+                                                         class="rounded-xl border border-blue-100 bg-blue-50/40 p-5">
+                                                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
+                                                        <div>
+                                                            <p class="font-bold text-gray-900" th:text="${credentialView.postTitle}">Product Name</p>
+                                                            <p class="text-xs text-gray-500 mt-1"
+                                                               th:text="${'Trạng thái: ' + credentialView.assignmentStatus + ' • Lượt xem: ' + credentialView.viewCount}">Status info</p>
+                                                        </div>
+                                                        <p class="text-xs text-gray-500"
+                                                           th:text="${credentialView.firstViewedAt != null ? 'Xem lần đầu: ' + #temporals.format(credentialView.firstViewedAt, 'dd/MM/yyyy HH:mm') : 'Chưa xem trước đó'}">
+                                                            First view info
+                                                        </p>
+                                                    </div>
+                                                    <div class="grid gap-4 md:grid-cols-2">
+                                                        <div class="rounded-xl bg-white p-4 border border-gray-100">
+                                                            <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Username / Email</p>
+                                                            <p class="break-all text-base font-bold text-gray-900 font-mono" th:text="${credentialView.accountUsername}">username</p>
+                                                        </div>
+                                                        <div class="rounded-xl bg-white p-4 border border-gray-100">
+                                                            <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Password / Key</p>
+                                                            <p class="break-all font-mono text-base font-bold text-gray-900" th:text="${credentialView.accountPassword}">password</p>
+                                                        </div>
+                                                    </div>
+                                                    <div th:if="${credentialView.securityNotes != null and !#strings.isEmpty(credentialView.securityNotes)}"
+                                                         class="mt-4 rounded-xl bg-amber-50 p-4 border border-amber-100">
+                                                        <p class="text-xs font-semibold uppercase tracking-wider text-amber-700 mb-2">Ghi chú bảo mật</p>
+                                                        <p class="whitespace-pre-line text-sm text-amber-900" th:text="${credentialView.securityNotes}">Security notes</p>
+                                                    </div>
+                                                </article>
+                                            </div>
+                                        </section>
+                                    </td>
+                                </tr>
+                                </th:block>
                             </tbody>
                         </table>
                     </div>
@@ -365,50 +417,6 @@
                     </div>
                 </div>
 
-                <!-- Credentials Section (shown when revealed) -->
-                <section th:if="${revealedCredentialsOrderId != null and not #lists.isEmpty(revealedCredentials)}"
-                         class="bg-white rounded-xl shadow-soft border border-blue-100 p-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <div>
-                            <h3 class="text-lg font-bold text-gray-900">Credentials đã giao</h3>
-                            <p class="text-sm text-gray-500">Thông tin đăng nhập cho đơn hàng của bạn.</p>
-                        </div>
-                        <p class="text-xs text-gray-500 flex items-center gap-1">
-                            <i class="ph ph-info"></i> Lần xem này sẽ được ghi nhận.
-                        </p>
-                    </div>
-                    <div class="space-y-4">
-                        <article th:each="credentialView : ${revealedCredentials}" 
-                                 class="rounded-xl border border-blue-100 bg-blue-50/40 p-5">
-                            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
-                                <div>
-                                    <p class="font-bold text-gray-900" th:text="${credentialView.postTitle}">Product Name</p>
-                                    <p class="text-xs text-gray-500 mt-1"
-                                       th:text="${'Trạng thái: ' + credentialView.assignmentStatus + ' • Lượt xem: ' + credentialView.viewCount}">Status info</p>
-                                </div>
-                                <p class="text-xs text-gray-500"
-                                   th:text="${credentialView.firstViewedAt != null ? 'Xem lần đầu: ' + #temporals.format(credentialView.firstViewedAt, 'dd/MM/yyyy HH:mm') : 'Chưa xem trước đó'}">
-                                    First view info
-                                </p>
-                            </div>
-                            <div class="grid gap-4 md:grid-cols-2">
-                                <div class="rounded-xl bg-white p-4 border border-gray-100">
-                                    <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Username / Email</p>
-                                    <p class="break-all text-base font-bold text-gray-900 font-mono" th:text="${credentialView.accountUsername}">username</p>
-                                </div>
-                                <div class="rounded-xl bg-white p-4 border border-gray-100">
-                                    <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Password / Key</p>
-                                    <p class="break-all font-mono text-base font-bold text-gray-900" th:text="${credentialView.accountPassword}">password</p>
-                                </div>
-                            </div>
-                            <div th:if="${credentialView.securityNotes != null and !#strings.isEmpty(credentialView.securityNotes)}"
-                                 class="mt-4 rounded-xl bg-amber-50 p-4 border border-amber-100">
-                                <p class="text-xs font-semibold uppercase tracking-wider text-amber-700 mb-2">Ghi chú bảo mật</p>
-                                <p class="whitespace-pre-line text-sm text-amber-900" th:text="${credentialView.securityNotes}">Security notes</p>
-                            </div>
-                        </article>
-                    </div>
-                </section>
             </main>
         </div>
     </div>
@@ -642,6 +650,7 @@
                 if (!tableBody) return;
 
                 const rows = Array.from(tableBody.querySelectorAll('.order-table-row'));
+                const credentialRows = Array.from(tableBody.querySelectorAll('.order-credentials-row'));
                 const filteredRows = getFilteredRows();
                 const totalRows = filteredRows.length;
                 const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
@@ -653,11 +662,18 @@
                 rows.forEach(row => {
                     row.style.display = 'none';
                 });
+                credentialRows.forEach(row => {
+                    row.style.display = 'none';
+                });
 
                 const startIndex = (currentPage - 1) * pageSize;
                 const endIndex = startIndex + pageSize;
                 filteredRows.slice(startIndex, endIndex).forEach(row => {
                     row.style.display = '';
+                    const credentialRow = tableBody.querySelector(`.order-credentials-row[data-credentials-for="${row.dataset.orderId}"]`);
+                    if (credentialRow) {
+                        credentialRow.style.display = '';
+                    }
                 });
 
                 const from = totalRows === 0 ? 0 : startIndex + 1;
@@ -674,6 +690,18 @@
                 }
                 if (nextPageBtn) {
                     nextPageBtn.disabled = currentPage >= totalPages;
+                }
+            }
+
+            function focusHighlightedOrderPage() {
+                if (!tableBody) return;
+                const rows = Array.from(tableBody.querySelectorAll('.order-table-row'));
+                const highlightedRow = rows.find(row => row.classList.contains('bg-blue-50'));
+                if (!highlightedRow) return;
+
+                const rowIndex = rows.indexOf(highlightedRow);
+                if (rowIndex >= 0) {
+                    currentPage = Math.floor(rowIndex / pageSize) + 1;
                 }
             }
 
@@ -712,6 +740,7 @@
                 });
             }
 
+            focusHighlightedOrderPage();
             renderTablePage();
         });
     </script>

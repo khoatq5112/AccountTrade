@@ -37,6 +37,8 @@ public class AdminDashboardService {
     private final PostRepository postRepository;
     private final PaymentRepository paymentRepository;
     private final UserRepository userRepository;
+    private final CategoryRepository categoryRepository;
+    private final com.group3.accounttrade.repository.PlatformEarningRepository platformEarningRepository;
 
     /**
      * Gets aggregated dashboard statistics for admin overview.
@@ -72,6 +74,12 @@ public class AdminDashboardService {
         long pendingDisputeCount = getPendingDisputeCount();
         long pendingApprovalCount = getPendingApprovalCount();
 
+        // Total platform earnings (all-time commission collected)
+        BigDecimal totalPlatformEarnings = platformEarningRepository.sumCommissionAmountAll();
+        if (totalPlatformEarnings == null) {
+            totalPlatformEarnings = BigDecimal.ZERO;
+        }
+
         return new AdminDashboardStats(
                 todayVolume != null ? todayVolume : BigDecimal.ZERO,
                 volumeChangePercent,
@@ -80,7 +88,8 @@ public class AdminDashboardService {
                 monthlyRevenue != null ? monthlyRevenue : BigDecimal.ZERO,
                 revenueChangePercent,
                 pendingDisputeCount,
-                pendingApprovalCount
+                pendingApprovalCount,
+                totalPlatformEarnings
         );
     }
 
@@ -311,5 +320,15 @@ public class AdminDashboardService {
     @Transactional(readOnly = true)
     public User getUserByUsername(String username) {
         return userRepository.findByUsername(username).orElse(null);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Optional<Category> getCategoryById(Integer categoryId) {
+        return categoryRepository.findById(categoryId);
+    }
+
+    @Transactional
+    public Category saveCategory(Category category) {
+        return categoryRepository.save(category);
     }
 }

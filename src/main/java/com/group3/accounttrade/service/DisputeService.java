@@ -6,6 +6,7 @@ import com.group3.accounttrade.dto.DisputeEventDTO;
 import com.group3.accounttrade.dto.DisputeMessageDTO;
 import com.group3.accounttrade.entity.*;
 import com.group3.accounttrade.repository.*;
+import com.group3.accounttrade.service.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -41,7 +42,7 @@ public class DisputeService {
     private final EscrowService escrowService;
     private final CredentialService credentialService;
     private final AuditLogRepository auditLogRepository;
-    private final NotificationRepository notificationRepository;
+    private final NotificationService notificationService;
     private final AdminReviewRepository adminReviewRepository;
     private final RefundRequestRepository refundRequestRepository;
 
@@ -624,17 +625,17 @@ public class DisputeService {
      * Notifies the buyer.
      */
     private void notifyBuyer(Order order, String title, String message) {
-        Notification notification = Notification.builder()
-                .user(order.getBuyer())
-                .notificationType(Notification.TYPE_DISPUTE)
-                .title(title)
-                .message(message)
-                .relatedEntityType("ORDER")
-                .relatedEntityId(order.getOrderId())
-                .priority(Notification.PRIORITY_HIGH)
-                .build();
-
-        notificationRepository.save(notification);
+        notificationService.createNotification(
+                order.getBuyer(),
+                Notification.TYPE_DISPUTE,
+                NotificationPreference.CATEGORY_DISPUTE,
+                title,
+                message,
+                Notification.PRIORITY_HIGH,
+                "ORDER",
+                order.getOrderId(),
+                "/buyer/disputes/" + order.getOrderId()
+        );
     }
 
     /**
@@ -642,25 +643,30 @@ public class DisputeService {
      */
     private void notifySeller(Order order, String title, String message) {
         User seller = getSellerFromOrder(order);
-        Notification notification = Notification.builder()
-                .user(seller)
-                .notificationType(Notification.TYPE_DISPUTE)
-                .title(title)
-                .message(message)
-                .relatedEntityType("ORDER")
-                .relatedEntityId(order.getOrderId())
-                .priority(Notification.PRIORITY_HIGH)
-                .build();
-
-        notificationRepository.save(notification);
+        notificationService.createNotification(
+                seller,
+                Notification.TYPE_DISPUTE,
+                NotificationPreference.CATEGORY_DISPUTE,
+                title,
+                message,
+                Notification.PRIORITY_HIGH,
+                "ORDER",
+                order.getOrderId(),
+                "/seller/disputes/" + order.getOrderId()
+        );
     }
 
     /**
      * Notifies admins.
      */
     private void notifyAdmins(String title, String message) {
-        // Create system notification for admin review queue
-        log.info("Admin notification: {} - {}", title, message);
+        notificationService.broadcastNotification(
+                title,
+                message,
+                Notification.TYPE_SYSTEM,
+                Notification.PRIORITY_HIGH,
+                List.of("Admin")
+        );
     }
 
     // ==================== NEW METHODS FOR DISPUTE FUNCTIONALITY ====================

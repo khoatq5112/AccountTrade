@@ -3,6 +3,8 @@ package com.group3.accounttrade.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
+
 /**
  * Entity representing a single-level product category.
  * Parent-child hierarchy has been removed for simplicity.
@@ -28,4 +30,7 @@ public class Category {
 
     @Column(name = "display_order")
     private Integer displayOrder;
+
+    @Column(name = "commission_rate", precision = 5, scale = 2)
+    private BigDecimal commissionRate;
 }

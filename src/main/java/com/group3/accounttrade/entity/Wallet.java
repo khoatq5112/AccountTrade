@@ -35,4 +35,12 @@ public class Wallet {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    /**
+     * Version for optimistic locking.
+     */
+    @Version
+    @Column(name = "version")
+    @Builder.Default
+    private Long version = 0L;
 }

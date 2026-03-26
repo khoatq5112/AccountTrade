@@ -375,6 +375,33 @@ public class PostService {
     }
 
     /**
+     * Calculates whether a post can currently be purchased.
+     * A post must be marked as in stock and still have at least one available credential.
+     *
+     * @param post the post to evaluate
+     * @return purchase availability result
+     */
+    public PurchaseAvailability getPurchaseAvailability(Post post) {
+        if (post == null) {
+            return new PurchaseAvailability(false, "Sản phẩm không tồn tại.", 0);
+        }
+
+        long availableCredentials = post.getPostId() != null
+                ? getCredentialStats(post.getPostId()).available()
+                : post.getAvailableCredentialCount();
+
+        if (!post.isInStock()) {
+            return new PurchaseAvailability(false, "Sản phẩm hiện chưa sẵn sàng để mua.", availableCredentials);
+        }
+
+        if (availableCredentials <= 0) {
+            return new PurchaseAvailability(false, "Sản phẩm đã hết tài khoản khả dụng.", 0);
+        }
+
+        return new PurchaseAvailability(true, null, availableCredentials);
+    }
+
+    /**
      * Gets credential statistics for a post.
      *
      * @param postId the post ID
@@ -446,5 +473,11 @@ public class PostService {
         public boolean isInStock() {
             return available > 0;
         }
+    }
+
+    /**
+     * DTO describing whether a post can be purchased right now.
+     */
+    public record PurchaseAvailability(boolean purchasable, String failureReason, long availableCredentialCount) {
     }
 }

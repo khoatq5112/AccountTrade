@@ -22,6 +22,8 @@ public class DataInitializer implements CommandLineRunner {
     private final PaymentStatusRepository paymentStatusRepository;
     private final EscrowStatusRepository escrowStatusRepository;
     private final DisputeStatusRepository disputeStatusRepository;
+    private final com.group3.accounttrade.repository.CommissionConfigRepository commissionConfigRepository;
+    private final NotificationTemplateRepository notificationTemplateRepository;
 
     @Override
     @Transactional
@@ -35,6 +37,8 @@ public class DataInitializer implements CommandLineRunner {
         initPaymentStatuses();
         initEscrowStatuses();
         initDisputeStatuses();
+        initCommissionConfig();
+        initNotificationTemplates();
     }
 
     private void initRoles() {
@@ -228,5 +232,91 @@ public class DataInitializer implements CommandLineRunner {
                 .build());
             log.info("Initialized {} dispute statuses", disputeStatusRepository.count());
         }
+    }
+
+    private void initCommissionConfig() {
+        if (commissionConfigRepository.count() == 0) {
+            commissionConfigRepository.save(com.group3.accounttrade.entity.CommissionConfig.builder()
+                .globalRatePercent(java.math.BigDecimal.valueOf(5))
+                .minRatePercent(java.math.BigDecimal.ZERO)
+                .maxRatePercent(java.math.BigDecimal.valueOf(100))
+                .build());
+            log.info("Initialized default commission config (5%)");
+        }
+    }
+
+    private void initNotificationTemplates() {
+        if (notificationTemplateRepository.count() > 0) {
+            return;
+        }
+
+        saveTemplate(NotificationTemplate.ORDER_CREATED, Notification.TYPE_ORDER, NotificationPreference.CATEGORY_ORDER,
+                "Đơn hàng ${orderNumber} đã được tạo",
+                "Đơn hàng ${orderNumber} của bạn đã được tạo với tổng thanh toán ${totalAmount}.",
+                "/buyer/purchases?orderId=${orderId}");
+        saveTemplate(NotificationTemplate.ORDER_STATUS_CHANGED, Notification.TYPE_ORDER, NotificationPreference.CATEGORY_ORDER,
+                "Đơn hàng ${orderNumber} đã cập nhật trạng thái",
+                "Đơn hàng ${orderNumber} vừa được cập nhật trạng thái mới.",
+                "/buyer/purchases?orderId=${orderId}");
+        saveTemplate(NotificationTemplate.PAYMENT_RECEIVED, Notification.TYPE_PAYMENT, NotificationPreference.CATEGORY_PAYMENT,
+                "Thanh toán cho ${orderNumber} đã thành công",
+                "Hệ thống đã ghi nhận thanh toán ${amount} cho đơn ${orderNumber}.",
+                "/buyer/purchases?orderId=${orderId}");
+        saveTemplate(NotificationTemplate.ESCROW_CREATED, Notification.TYPE_ESCROW, NotificationPreference.CATEGORY_ESCROW,
+                "Escrow đã được tạo cho ${orderNumber}",
+                "Khoản thanh toán ${amount} của đơn ${orderNumber} đang được giữ trong escrow.",
+                "/buyer/purchases?orderId=${orderId}");
+        saveTemplate(NotificationTemplate.ESCROW_RELEASED, Notification.TYPE_ESCROW, NotificationPreference.CATEGORY_ESCROW,
+                "Escrow của ${orderNumber} đã được giải ngân",
+                "Escrow của đơn ${orderNumber} đã được giải ngân thành công.",
+                "/seller/orders");
+        saveTemplate(NotificationTemplate.ESCROW_REFUNDED, Notification.TYPE_ESCROW, NotificationPreference.CATEGORY_ESCROW,
+                "Đơn ${orderNumber} đã được hoàn tiền",
+                "Khoản thanh toán của đơn ${orderNumber} đã được hoàn về cho bạn.",
+                "/buyer/purchases?orderId=${orderId}");
+        saveTemplate(NotificationTemplate.DISPUTE_OPENED, Notification.TYPE_DISPUTE, NotificationPreference.CATEGORY_DISPUTE,
+                "Tranh chấp ${disputeNumber} đã được mở",
+                "Tranh chấp ${disputeNumber} cho đơn ${orderNumber} đã được tạo với lý do: ${reason}.",
+                "/disputes/${disputeId}");
+        saveTemplate(NotificationTemplate.DISPUTE_RESOLVED, Notification.TYPE_DISPUTE, NotificationPreference.CATEGORY_DISPUTE,
+                "Tranh chấp ${disputeNumber} đã được xử lý",
+                "Tranh chấp ${disputeNumber} của đơn ${orderNumber} đã có kết quả xử lý.",
+                "/disputes/${disputeId}");
+        saveTemplate(NotificationTemplate.CREDENTIAL_ASSIGNED, Notification.TYPE_CREDENTIAL, NotificationPreference.CATEGORY_CREDENTIAL,
+                "Credential cho đơn ${orderNumber} đã sẵn sàng",
+                "Credential của đơn ${orderNumber} đã được bàn giao và sẵn sàng để bạn xem.",
+                "/buyer/purchases?orderId=${orderId}");
+        saveTemplate(NotificationTemplate.NEW_SELLER_ORDER, Notification.TYPE_ORDER, NotificationPreference.CATEGORY_ORDER,
+                "Bạn có đơn hàng mới ${orderNumber}",
+                "Một đơn hàng mới ${orderNumber} vừa được tạo cho sản phẩm của bạn.",
+                "/seller/orders");
+        saveTemplate(NotificationTemplate.WALLET_CREDITED, Notification.TYPE_WALLET, NotificationPreference.CATEGORY_WALLET,
+                "Ví của bạn vừa được cộng ${amount}",
+                "Giao dịch ${transactionId} đã cộng ${amount} vào ví. Số dư mới: ${balanceAfter}.",
+                "/buyer/wallet");
+        saveTemplate(NotificationTemplate.SYSTEM_ALERT, Notification.TYPE_SYSTEM, NotificationPreference.CATEGORY_SYSTEM,
+                "${title}",
+                "${message}",
+                "/");
+
+        log.info("Initialized {} notification templates", notificationTemplateRepository.count());
+    }
+
+    private void saveTemplate(String code,
+                              String notificationType,
+                              String category,
+                              String titleTemplate,
+                              String messageTemplate,
+                              String actionUrlTemplate) {
+        notificationTemplateRepository.save(NotificationTemplate.builder()
+                .templateCode(code)
+                .notificationType(notificationType)
+                .notificationCategory(category)
+                .titleTemplate(titleTemplate)
+                .messageTemplate(messageTemplate)
+                .defaultActionUrlTemplate(actionUrlTemplate)
+                .defaultPriority(Notification.PRIORITY_NORMAL)
+                .isActive(true)
+                .build());
     }
 }

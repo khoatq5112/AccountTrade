@@ -3,6 +3,8 @@ package com.group3.accounttrade.service;
 import com.group3.accounttrade.entity.Order;
 import com.group3.accounttrade.entity.OrderItem;
 import com.group3.accounttrade.entity.OrderStatus;
+import com.group3.accounttrade.entity.Notification;
+import com.group3.accounttrade.entity.NotificationPreference;
 import com.group3.accounttrade.entity.Payment;
 import com.group3.accounttrade.entity.PaymentStatus;
 import com.group3.accounttrade.entity.Post;
@@ -15,6 +17,7 @@ import com.group3.accounttrade.repository.OrderStatusRepository;
 import com.group3.accounttrade.repository.PaymentRepository;
 import com.group3.accounttrade.repository.PaymentStatusRepository;
 import com.group3.accounttrade.repository.PostRepository;
+import com.group3.accounttrade.service.notification.NotificationService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -39,23 +43,15 @@ public class OrderCheckoutService {
     private final CartRepository cartRepository;
     private final CredentialService credentialService;
     private final VnpayPaymentService vnpayPaymentService;
+    private final CommissionService commissionService;
+    private final WalletService walletService;
+    private final EscrowService escrowService;
+    private final PostService postService;
+    private final NotificationService notificationService;
 
     @Transactional
     public CheckoutSession initiateCheckout(User buyer, Integer postId, HttpServletRequest request) {
-        Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new IllegalArgumentException("Post not found"));
-
-        if (post.getSeller() != null && post.getSeller().getUserId().equals(buyer.getUserId())) {
-            throw new IllegalArgumentException("You cannot purchase your own post");
-        }
-
-        if (!post.isInStock()) {
-            throw new IllegalStateException("Product is out of stock");
-        }
-
-        if (!credentialService.hasEnoughCredentials(post, DEFAULT_QUANTITY)) {
-            throw new IllegalStateException("No available credentials for this post");
-        }
+        Post post = validatePostForCheckout(buyer, postId);
 
         OrderStatus awaitingPaymentStatus = orderStatusRepository.findByStatusName(OrderStatus.AWAITING_PAYMENT)
                 .orElseThrow(() -> new IllegalStateException("AWAITING_PAYMENT status not found"));
@@ -74,17 +70,22 @@ public class OrderCheckoutService {
                 .build();
         order = orderRepository.save(order);
 
+        BigDecimal effectiveRate = commissionService.getEffectiveRate(post.getCategory());
+        BigDecimal itemFee = commissionService.calculateFee(post.getPrice(), effectiveRate);
+        BigDecimal itemSellerEarnings = post.getPrice().subtract(itemFee);
+
         OrderItem orderItem = OrderItem.builder()
                 .order(order)
                 .post(post)
                 .seller(post.getSeller())
                 .unitPrice(post.getPrice())
-                .platformFee(BigDecimal.ZERO)
-                .sellerEarnings(post.getPrice())
+                .platformFee(itemFee)
+                .sellerEarnings(itemSellerEarnings)
                 .postTitleSnapshot(post.getTitle())
                 .itemStatus(OrderItem.STATUS_PENDING)
                 .build();
         orderItem = orderItemRepository.save(orderItem);
+        addOrderItemToOrder(order, orderItem);
 
         List<PostCredential> reservedCredentials = credentialService.reserveCredentials(post, DEFAULT_QUANTITY, orderItem);
         PostCredential reservedCredential = reservedCredentials.get(0);
@@ -102,6 +103,7 @@ public class OrderCheckoutService {
                 .vnpayIpAddress(request.getRemoteAddr())
                 .build();
         paymentRepository.save(payment);
+        notifyOrderCreated(order, post);
 
         cartRepository.findByUserAndPost(buyer, post).ifPresent(cartRepository::delete);
 
@@ -117,7 +119,171 @@ public class OrderCheckoutService {
         return "ORD-" + System.currentTimeMillis();
     }
 
+    public WalletCheckoutPreview previewWalletCheckout(User buyer, Integer postId) {
+        Post post = validatePostForCheckout(buyer, postId);
+        BigDecimal walletBalance = walletService.getBalance(buyer);
+        BigDecimal deficit = walletService.getDeficit(buyer, post.getPrice());
+
+        return WalletCheckoutPreview.builder()
+                .post(post)
+                .walletBalance(walletBalance)
+                .totalAmount(post.getPrice())
+                .deficitAmount(deficit)
+                .suggestedTopUpAmount(walletService.getSuggestedTopUpAmount(deficit))
+                .hasSufficientBalance(deficit.compareTo(BigDecimal.ZERO) == 0)
+                .build();
+    }
+
+    @Transactional
+    public Order initiateWalletCheckout(User buyer, Integer postId) {
+        WalletCheckoutPreview preview = previewWalletCheckout(buyer, postId);
+        Post post = preview.post();
+
+        if (!preview.hasSufficientBalance()) {
+            throw new WalletService.InsufficientBalanceException(
+                    "Số dư ví không đủ để thanh toán. Bạn cần nạp thêm "
+                            + preview.deficitAmount().stripTrailingZeros().toPlainString() + " VND.");
+        }
+
+        OrderStatus paidStatus = orderStatusRepository.findByStatusName(OrderStatus.PAID)
+                .orElseThrow(() -> new IllegalStateException("PAID status not found"));
+        PaymentStatus paidPaymentStatus = paymentStatusRepository.findByStatusName(PaymentStatus.PAID)
+                .orElseThrow(() -> new IllegalStateException("PAID payment status not found"));
+
+        String orderNumber = generateOrderNumber();
+
+        BigDecimal effectiveRate = commissionService.getEffectiveRate(post.getCategory());
+        BigDecimal itemFee = commissionService.calculateFee(post.getPrice(), effectiveRate);
+        BigDecimal itemSellerEarnings = post.getPrice().subtract(itemFee);
+
+        Order order = Order.builder()
+                .orderNumber(orderNumber)
+                .buyer(buyer)
+                .orderStatus(paidStatus)
+                .subtotal(post.getPrice())
+                .platformFee(itemFee)
+                .totalAmount(post.getPrice())
+                .paidAt(LocalDateTime.now())
+                .build();
+        order = orderRepository.saveAndFlush(order);
+
+        OrderItem orderItem = OrderItem.builder()
+                .order(order)
+                .post(post)
+                .seller(post.getSeller())
+                .unitPrice(post.getPrice())
+                .platformFee(itemFee)
+                .sellerEarnings(itemSellerEarnings)
+                .postTitleSnapshot(post.getTitle())
+                .itemStatus(OrderItem.STATUS_PENDING)
+                .build();
+
+        List<PostCredential> reservedCredentials = credentialService.reserveCredentials(post, DEFAULT_QUANTITY, orderItem);
+        PostCredential reservedCredential = reservedCredentials.get(0);
+        orderItem.setAssignedCredential(reservedCredential);
+        orderItem = orderItemRepository.saveAndFlush(orderItem);
+        addOrderItemToOrder(order, orderItem);
+
+        walletService.deductBalance(buyer, post.getPrice(), orderNumber);
+
+        String walletTxnRef = "WALLET-" + orderNumber;
+        Payment payment = Payment.builder()
+                .order(order)
+                .paymentStatus(paidPaymentStatus)
+                .vnpayTxnRef(walletTxnRef)
+                .amount(order.getTotalAmount())
+                .currency(order.getCurrency())
+                .orderInfo("Thanh toan bang vi " + orderNumber)
+                .paidAt(LocalDateTime.now())
+                .ipnProcessed(true)
+                .build();
+        paymentRepository.save(payment);
+        notifyOrderCreated(order, post);
+        notifyPaymentReceived(order, post);
+
+        escrowService.createEscrow(order);
+        credentialService.assignCredentialsToBuyer(order);
+
+        cartRepository.findByUserAndPost(buyer, post).ifPresent(cartRepository::delete);
+
+        return order;
+    }
+
+    private Post validatePostForCheckout(User buyer, Integer postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("Post not found"));
+
+        if (post.getSeller() != null && post.getSeller().getUserId().equals(buyer.getUserId())) {
+            throw new IllegalArgumentException("You cannot purchase your own post");
+        }
+
+        PostService.PurchaseAvailability purchaseAvailability = postService.getPurchaseAvailability(post);
+        if (!purchaseAvailability.purchasable()) {
+            throw new IllegalStateException(purchaseAvailability.failureReason());
+        }
+
+        return post;
+    }
+
+    private void addOrderItemToOrder(Order order, OrderItem orderItem) {
+        if (order.getOrderItems().stream().noneMatch(existing -> existing == orderItem)) {
+            order.getOrderItems().add(orderItem);
+        }
+    }
+
+    private void notifyOrderCreated(Order order, Post post) {
+        notificationService.createNotification(
+                order.getBuyer(),
+                Notification.TYPE_ORDER,
+                NotificationPreference.CATEGORY_ORDER,
+                "Đơn hàng " + order.getOrderNumber() + " đã được tạo",
+                "Đơn hàng cho sản phẩm " + post.getTitle() + " đã được tạo thành công.",
+                Notification.PRIORITY_NORMAL,
+                "ORDER",
+                order.getOrderId(),
+                "/buyer/purchases?orderId=" + order.getOrderId()
+        );
+
+        if (post.getSeller() != null) {
+            notificationService.createNotification(
+                    post.getSeller(),
+                    Notification.TYPE_ORDER,
+                    NotificationPreference.CATEGORY_ORDER,
+                    "Bạn có đơn hàng mới " + order.getOrderNumber(),
+                    "Sản phẩm " + post.getTitle() + " vừa có đơn hàng mới.",
+                    Notification.PRIORITY_NORMAL,
+                    "ORDER",
+                    order.getOrderId(),
+                    "/seller/orders"
+            );
+        }
+    }
+
+    private void notifyPaymentReceived(Order order, Post post) {
+        notificationService.createNotification(
+                order.getBuyer(),
+                Notification.TYPE_PAYMENT,
+                NotificationPreference.CATEGORY_PAYMENT,
+                "Thanh toán đơn " + order.getOrderNumber() + " thành công",
+                "Thanh toán cho sản phẩm " + post.getTitle() + " đã được ghi nhận thành công.",
+                Notification.PRIORITY_NORMAL,
+                "ORDER",
+                order.getOrderId(),
+                "/buyer/purchases?orderId=" + order.getOrderId()
+        );
+    }
+
     @Builder
     public record CheckoutSession(Order order, Payment payment, String paymentUrl) {
+    }
+
+    @Builder
+    public record WalletCheckoutPreview(
+            Post post,
+            BigDecimal walletBalance,
+            BigDecimal totalAmount,
+            BigDecimal deficitAmount,
+            BigDecimal suggestedTopUpAmount,
+            boolean hasSufficientBalance) {
     }
 }

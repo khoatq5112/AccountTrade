@@ -86,6 +86,19 @@ public class PaymentController {
         
         Map<String, String> params = extractVnpayParams(request);
         VnpayPaymentService.PaymentResult result = vnpayPaymentService.processReturnCallback(params, request);
+
+        if (result.isTopUp()) {
+            if (result.isSuccess() && result.getPendingPostId() != null) {
+                ModelAndView mav = new ModelAndView("redirect:/buyer/checkout");
+                mav.addObject("postId", result.getPendingPostId());
+                return new ModelAndView("redirect:/buyer/checkout?postId=" + result.getPendingPostId() + "&topupSuccess=true");
+            }
+            ModelAndView mav = new ModelAndView("redirect:/buyer/wallet");
+            if (result.isSuccess()) {
+                return new ModelAndView("redirect:/buyer/wallet?topupSuccess=true");
+            }
+            return new ModelAndView("redirect:/buyer/wallet?topupFailed=true");
+        }
         
         ModelAndView mav = new ModelAndView("payment_result");
         mav.addObject("success", result.isSuccess());

@@ -5,6 +5,7 @@ import com.group3.accounttrade.entity.Post;
 import com.group3.accounttrade.entity.User;
 import com.group3.accounttrade.repository.UserRepository;
 import com.group3.accounttrade.service.CategoryService;
+import com.group3.accounttrade.service.PostService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -29,6 +30,7 @@ import java.util.stream.Collectors;
 public class MarketplaceController {
 
     private final CategoryService categoryService;
+    private final PostService postService;
     private final UserRepository userRepository;
 
     @GetMapping("/marketplace")
@@ -121,7 +123,10 @@ public class MarketplaceController {
             return "redirect:/marketplace?error=not_found";
         }
 
+        PostService.PurchaseAvailability purchaseAvailability = postService.getPurchaseAvailability(post);
         model.addAttribute("post", post);
+        model.addAttribute("canPurchasePost", purchaseAvailability.purchasable());
+        model.addAttribute("purchaseUnavailableMessage", purchaseAvailability.failureReason());
         addUserContext(model);
         return "marketplace_detail";
     }

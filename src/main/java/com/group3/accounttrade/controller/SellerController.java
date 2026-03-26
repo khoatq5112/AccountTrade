@@ -261,6 +261,10 @@ public class SellerController {
             String username = authentication.getName();
             Post post = postService.getPostByIdAndSeller(postId, username);
 
+            // Add current user for sidebar
+            User user = userRepository.findByUsername(username).orElse(null);
+            model.addAttribute("currentUser", user);
+
             // Create form from existing post
             PostForm postForm = new PostForm();
             postForm.setTitle(post.getTitle());
@@ -300,6 +304,9 @@ public class SellerController {
             try {
                 String username = authentication.getName();
                 Post post = postService.getPostByIdAndSeller(postId, username);
+                // Add current user for sidebar
+                User user = userRepository.findByUsername(username).orElse(null);
+                model.addAttribute("currentUser", user);
                 model.addAttribute("post", post);
                 model.addAttribute("categories", categoryRepository.findAllOrderByDisplayOrderAsc());
                 model.addAttribute("credentialStats", postService.getCredentialStats(postId));
@@ -379,6 +386,10 @@ public class SellerController {
         try {
             String username = authentication.getName();
             Post post = postService.getPostByIdAndSeller(postId, username);
+
+            // Add current user for sidebar
+            User user = userRepository.findByUsername(username).orElse(null);
+            model.addAttribute("currentUser", user);
 
             // Validate page size (only allow 10, 25, 50)
             int pageSize = (size == 25 || size == 50) ? size : 10;
@@ -591,9 +602,13 @@ public class SellerController {
      */
     private void addCategoriesToModelForEdit(Model model, Integer postId, Authentication authentication) {
         try {
-            Post post = postService.getPostByIdAndSeller(postId, authentication.getName());
+            String username = authentication.getName();
+            Post post = postService.getPostByIdAndSeller(postId, username);
             model.addAttribute("post", post);
             model.addAttribute("credentialStats", postService.getCredentialStats(postId));
+            // Add current user for sidebar
+            User user = userRepository.findByUsername(username).orElse(null);
+            model.addAttribute("currentUser", user);
         } catch (Exception ignored) {
             // Ignore if post not found
         }

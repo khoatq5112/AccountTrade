@@ -2,6 +2,7 @@ package com.group3.accounttrade.service;
 
 import com.group3.accounttrade.entity.*;
 import com.group3.accounttrade.repository.*;
+import com.group3.accounttrade.service.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,7 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -35,16 +35,15 @@ public class EscrowService {
     private final OrderRepository orderRepository;
     private final OrderStatusRepository orderStatusRepository;
     private final AuditLogRepository auditLogRepository;
-    private final NotificationRepository notificationRepository;
+    private final NotificationService notificationService;
     private final UserRepository userRepository;
     private final WalletRepository walletRepository;
     private final CredentialService credentialService;
+    private final CommissionService commissionService;
+    private final WalletService walletService;
 
     @Value("${escrow.verification-timeout-hours:24}")
     private int verificationTimeoutHours;
-
-    @Value("${escrow.platform-fee-percent:5}")
-    private BigDecimal platformFeePercent;
 
     // Escrow status constants
     public static final String STATUS_NOT_CREATED = "NOT_CREATED";
@@ -72,7 +71,12 @@ public class EscrowService {
 
         // Calculate amounts
         BigDecimal grossAmount = order.getTotalAmount();
-        BigDecimal platformFee = calculatePlatformFee(grossAmount);
+        Category category = order.getOrderItems().isEmpty() ? null
+                : order.getOrderItems().get(0).getPost() != null
+                ? order.getOrderItems().get(0).getPost().getCategory()
+                : null;
+        BigDecimal effectiveRate = commissionService.getEffectiveRate(category);
+        BigDecimal platformFee = commissionService.calculateFee(grossAmount, effectiveRate);
         BigDecimal sellerAmount = grossAmount.subtract(platformFee);
 
         // Get holding status
@@ -92,7 +96,7 @@ public class EscrowService {
                 .autoReleaseDeadline(autoReleaseDeadline)
                 .build();
 
-        escrowRepository.save(escrow);
+        escrow = escrowRepository.saveAndFlush(escrow);
 
         // Create escrow transaction for HOLD
         createEscrowTransaction(escrow, EscrowTransaction.TYPE_CREATED, grossAmount, grossAmount,
@@ -163,6 +167,8 @@ public class EscrowService {
         markOrderItemsCompleted(order);
         credentialService.markCredentialsAsConfirmed(order);
         creditSellerWallets(order);
+        creditPlatformCommission(order, escrow);
+        commissionService.recordEarning(escrow, order);
 
         // Create audit log
         String performerRole = adminUser != null
@@ -349,19 +355,11 @@ public class EscrowService {
             orderRepository.save(order);
         }
 
-        // Credit buyer's wallet
+        // Credit buyer's wallet via WalletService (records WalletTransaction)
         User buyer = order.getBuyer();
-        Wallet buyerWallet = walletRepository.findByUser(buyer)
-                .orElseGet(() -> Wallet.builder()
-                        .user(buyer)
-                        .balance(BigDecimal.ZERO)
-                        .frozenBalance(BigDecimal.ZERO)
-                        .build());
-        BigDecimal currentBalance = buyerWallet.getBalance() != null ? buyerWallet.getBalance() : BigDecimal.ZERO;
-        buyerWallet.setBalance(currentBalance.add(refundAmount));
-        walletRepository.save(buyerWallet);
-        log.info("[DEBUG] Credited buyer wallet - userId: {}, amount: {}, newBalance: {}",
-                buyer.getUserId(), refundAmount, buyerWallet.getBalance());
+        walletService.creditBalance(buyer, refundAmount, order.getOrderNumber(), WalletTransaction.TYPE_REFUND);
+        log.info("[DEBUG] Credited buyer wallet via WalletService - userId: {}, amount: {}",
+                buyer.getUserId(), refundAmount);
 
         // Create audit log
         createAuditLog(adminUser, "ESCROW_REFUNDED", "Escrow", escrow.getEscrowId(),
@@ -425,17 +423,6 @@ public class EscrowService {
     }
 
     /**
-     * Calculates the platform fee based on the gross amount.
-     *
-     * @param grossAmount The gross amount
-     * @return The platform fee
-     */
-    private BigDecimal calculatePlatformFee(BigDecimal grossAmount) {
-        BigDecimal feePercent = platformFeePercent.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
-        return grossAmount.multiply(feePercent).setScale(4, RoundingMode.HALF_UP);
-    }
-
-    /**
      * Creates an escrow transaction record.
      */
     private void createEscrowTransaction(Escrow escrow, String transactionType, BigDecimal amount,
@@ -483,11 +470,34 @@ public class EscrowService {
         }
 
         for (java.util.Map.Entry<User, BigDecimal> entry : sellerEarnings.entrySet()) {
-            Wallet wallet = walletRepository.findByUser(entry.getKey())
-                    .orElseGet(() -> Wallet.builder().user(entry.getKey()).balance(BigDecimal.ZERO).frozenBalance(BigDecimal.ZERO).build());
-            wallet.setBalance((wallet.getBalance() != null ? wallet.getBalance() : BigDecimal.ZERO).add(entry.getValue()));
-            walletRepository.save(wallet);
+            walletService.creditBalance(entry.getKey(), entry.getValue(), order.getOrderNumber(),
+                    WalletTransaction.TYPE_SELLER_EARNING);
         }
+    }
+
+    private void creditPlatformCommission(Order order, Escrow escrow) {
+        BigDecimal commissionAmount = escrow.getPlatformFee();
+        if (commissionAmount == null || commissionAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        Optional<User> platformAdmin = resolvePlatformAdmin();
+        if (platformAdmin.isEmpty()) {
+            log.warn("Platform commission {} for order {} was recorded but no admin wallet owner was found",
+                    commissionAmount, order.getOrderNumber());
+            return;
+        }
+
+        walletService.creditBalance(
+                platformAdmin.get(),
+                commissionAmount,
+                order.getOrderNumber(),
+                WalletTransaction.TYPE_PLATFORM_COMMISSION
+        );
+    }
+
+    private Optional<User> resolvePlatformAdmin() {
+        return userRepository.findByRole_RoleNameIgnoreCase("Admin").stream().findFirst();
     }
 
     private boolean isAdminUser(User user) {
@@ -527,34 +537,33 @@ public class EscrowService {
 
         Post post = items.get(0).getPost();
         User seller = post.getSeller();
-
-        Notification notification = Notification.builder()
-                .user(seller)
-                .notificationType(Notification.TYPE_ESCROW)
-                .title(title)
-                .message(message)
-                .relatedEntityType("ORDER")
-                .relatedEntityId(order.getOrderId())
-                .priority(Notification.PRIORITY_HIGH)
-                .build();
-
-        notificationRepository.save(notification);
+        notificationService.createNotification(
+                seller,
+                Notification.TYPE_ESCROW,
+                NotificationPreference.CATEGORY_ESCROW,
+                title,
+                message,
+                Notification.PRIORITY_HIGH,
+                "ORDER",
+                order.getOrderId(),
+                "/seller/orders"
+        );
     }
 
     /**
      * Notifies the buyer about escrow changes.
      */
     private void notifyBuyer(Order order, String title, String message) {
-        Notification notification = Notification.builder()
-                .user(order.getBuyer())
-                .notificationType(Notification.TYPE_ESCROW)
-                .title(title)
-                .message(message)
-                .relatedEntityType("ORDER")
-                .relatedEntityId(order.getOrderId())
-                .priority(Notification.PRIORITY_HIGH)
-                .build();
-
-        notificationRepository.save(notification);
+        notificationService.createNotification(
+                order.getBuyer(),
+                Notification.TYPE_ESCROW,
+                NotificationPreference.CATEGORY_ESCROW,
+                title,
+                message,
+                Notification.PRIORITY_HIGH,
+                "ORDER",
+                order.getOrderId(),
+                "/buyer/purchases?orderId=" + order.getOrderId()
+        );
     }
 }

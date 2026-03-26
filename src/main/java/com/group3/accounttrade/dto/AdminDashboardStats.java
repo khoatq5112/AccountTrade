@@ -14,7 +14,8 @@ public record AdminDashboardStats(
     BigDecimal monthlyFeeRevenue,
     double monthlyRevenueChangePercent,
     long pendingDisputeCount,
-    long pendingApprovalCount
+    long pendingApprovalCount,
+    BigDecimal totalPlatformEarnings
 ) {
     /**
      * Formats the daily transaction volume as Vietnamese currency.
@@ -35,6 +36,13 @@ public record AdminDashboardStats(
      */
     public String getFormattedMonthlyRevenue() {
         return formatCurrency(monthlyFeeRevenue);
+    }
+
+    /**
+     * Formats the total platform earnings as Vietnamese currency.
+     */
+    public String getFormattedTotalEarnings() {
+        return formatCurrency(totalPlatformEarnings);
     }
 
     /**

@@ -2,14 +2,20 @@ package com.group3.accounttrade.controller;
 
 import com.group3.accounttrade.dto.AdminDashboardStats;
 import com.group3.accounttrade.dto.ChartDataPoint;
+import com.group3.accounttrade.dto.CommissionConfigDTO;
+import com.group3.accounttrade.dto.CommissionEarningSummaryDTO;
 import com.group3.accounttrade.dto.DisputeDTO;
 import com.group3.accounttrade.dto.DisputeDetailDTO;
 import com.group3.accounttrade.dto.PendingPostDTO;
+import com.group3.accounttrade.dto.PlatformEarningDTO;
 import com.group3.accounttrade.dto.TransactionDTO;
 import com.group3.accounttrade.dto.TransactionStatsDTO;
 import com.group3.accounttrade.dto.UserDTO;
+import com.group3.accounttrade.entity.CommissionConfig;
+import com.group3.accounttrade.entity.PlatformEarning;
 import com.group3.accounttrade.service.AdminDashboardService;
 import com.group3.accounttrade.service.AdminTransactionService;
+import com.group3.accounttrade.service.CommissionService;
 import com.group3.accounttrade.service.DisputeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +43,7 @@ public class AdminDashboardController {
     private final AdminDashboardService adminDashboardService;
     private final DisputeService disputeService;
     private final AdminTransactionService adminTransactionService;
+    private final CommissionService commissionService;
 
     /**
      * Gets aggregated dashboard statistics.
@@ -450,5 +457,135 @@ public class AdminDashboardController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(transaction.get());
+    }
+
+    // ==================== Commission Management Endpoints ====================
+
+    @GetMapping("/commission/config")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<CommissionConfigDTO> getCommissionConfig() {
+        CommissionConfig config = commissionService.getConfig();
+        if (config == null) {
+            CommissionConfigDTO dto = new CommissionConfigDTO(null, commissionService.getGlobalRate(),
+                    java.math.BigDecimal.ZERO, java.math.BigDecimal.valueOf(100), null, null);
+            return ResponseEntity.ok(dto);
+        }
+        CommissionConfigDTO dto = new CommissionConfigDTO(
+                config.getId(),
+                config.getGlobalRatePercent(),
+                config.getMinRatePercent(),
+                config.getMaxRatePercent(),
+                config.getUpdatedAt(),
+                config.getUpdatedBy() != null ? config.getUpdatedBy().getUsername() : null
+        );
+        return ResponseEntity.ok(dto);
+    }
+
+    @PutMapping("/commission/config")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> updateCommissionConfig(
+            @RequestParam java.math.BigDecimal rate,
+            Authentication authentication) {
+        com.group3.accounttrade.entity.User admin = adminDashboardService.getUserByUsername(authentication.getName());
+        if (admin == null) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Admin not found"));
+        }
+        try {
+            CommissionConfig updated = commissionService.updateGlobalRate(rate, admin);
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Commission rate updated successfully");
+            response.put("newRate", updated.getGlobalRatePercent());
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/commission/earnings/summary")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<CommissionEarningSummaryDTO> getCommissionEarningSummary() {
+        CommissionEarningSummaryDTO summary = new CommissionEarningSummaryDTO(
+                commissionService.getTodayEarnings(),
+                commissionService.getMonthEarnings(),
+                commissionService.getTotalEarnings(),
+                commissionService.getTotalTransactionCount()
+        );
+        return ResponseEntity.ok(summary);
+    }
+
+    @GetMapping("/commission/earnings")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> getCommissionEarnings(
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+
+        java.time.LocalDateTime fromDateTime = null;
+        java.time.LocalDateTime toDateTime = null;
+        if (from != null && !from.isEmpty()) {
+            try { fromDateTime = java.time.LocalDate.parse(from).atStartOfDay(); } catch (Exception ignored) {}
+        }
+        if (to != null && !to.isEmpty()) {
+            try { toDateTime = java.time.LocalDate.parse(to).atTime(23, 59, 59); } catch (Exception ignored) {}
+        }
+
+        Page<PlatformEarning> earningsPage = commissionService.getEarnings(fromDateTime, toDateTime, pageable);
+        java.util.List<PlatformEarningDTO> content = earningsPage.getContent().stream()
+                .map(pe -> new PlatformEarningDTO(
+                        pe.getId(),
+                        pe.getOrder() != null ? pe.getOrder().getOrderNumber() : null,
+                        pe.getCategory() != null ? pe.getCategory().getCategoryName() : null,
+                        pe.getGrossAmount(),
+                        pe.getCommissionAmount(),
+                        pe.getRateApplied(),
+                        pe.getCreatedAt()
+                ))
+                .toList();
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("content", content);
+        response.put("totalElements", earningsPage.getTotalElements());
+        response.put("totalPages", earningsPage.getTotalPages());
+        response.put("currentPage", page);
+        response.put("pageSize", size);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/categories/{categoryId}/commission")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> getCategoryCommissionRate(@PathVariable Integer categoryId) {
+        return adminDashboardService.getCategoryById(categoryId)
+                .map(cat -> {
+                    Map<String, Object> resp = new HashMap<>();
+                    resp.put("categoryId", cat.getCategoryId());
+                    resp.put("categoryName", cat.getCategoryName());
+                    resp.put("commissionRate", cat.getCommissionRate());
+                    resp.put("effectiveRate", commissionService.getEffectiveRate(cat));
+                    return ResponseEntity.ok(resp);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/categories/{categoryId}/commission")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> updateCategoryCommissionRate(
+            @PathVariable Integer categoryId,
+            @RequestParam(required = false) java.math.BigDecimal rate) {
+        return adminDashboardService.getCategoryById(categoryId)
+                .map(cat -> {
+                    cat.setCommissionRate(rate);
+                    adminDashboardService.saveCategory(cat);
+                    Map<String, Object> resp = new HashMap<>();
+                    resp.put("success", true);
+                    resp.put("categoryId", cat.getCategoryId());
+                    resp.put("commissionRate", cat.getCommissionRate());
+                    resp.put("message", rate == null ? "Category rate cleared (using global rate)" : "Category rate updated");
+                    return ResponseEntity.ok(resp);
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 }

@@ -1,5 +1,6 @@
 package com.group3.accounttrade.controller;
 
+import com.group3.accounttrade.entity.Order;
 import com.group3.accounttrade.entity.Post;
 import com.group3.accounttrade.entity.StockStatus;
 import com.group3.accounttrade.entity.User;
@@ -10,6 +11,7 @@ import com.group3.accounttrade.repository.WalletRepository;
 import com.group3.accounttrade.service.BuyerOrderService;
 import com.group3.accounttrade.service.CartService;
 import com.group3.accounttrade.service.OrderCheckoutService;
+import com.group3.accounttrade.service.WalletService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +29,10 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -58,6 +64,9 @@ class BuyerControllerTest {
 
     @Mock
     private OrderCheckoutService orderCheckoutService;
+
+    @Mock
+    private WalletService walletService;
 
     @InjectMocks
     private BuyerController buyerController;
@@ -91,15 +100,41 @@ class BuyerControllerTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("buyer", "pw", List.of()));
         when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
-        when(postRepository.findById(5)).thenReturn(Optional.of(post));
+        when(orderCheckoutService.previewWalletCheckout(buyer, 5))
+                .thenReturn(OrderCheckoutService.WalletCheckoutPreview.builder()
+                        .post(post)
+                        .walletBalance(BigDecimal.valueOf(200000))
+                        .totalAmount(post.getPrice())
+                        .deficitAmount(BigDecimal.ZERO)
+                        .suggestedTopUpAmount(BigDecimal.ZERO)
+                        .hasSufficientBalance(true)
+                        .build());
+        when(walletService.getMinimumTopUpAmount()).thenReturn(BigDecimal.valueOf(10000));
 
         Model model = new ExtendedModelMap();
 
-        String viewName = buyerController.checkout(5, model);
+        String viewName = buyerController.checkout(5, null, model);
 
         assertEquals("checkout", viewName);
         assertEquals(post, model.getAttribute("post"));
         assertEquals(buyer, model.getAttribute("user"));
+    }
+
+    @Test
+    void checkoutRedirectsBackToMarketplaceWhenPostIsUnavailable() {
+        User buyer = User.builder().userId(1).username("buyer").build();
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("buyer", "pw", List.of()));
+        when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
+        when(orderCheckoutService.previewWalletCheckout(buyer, 5))
+                .thenThrow(new IllegalStateException("Sản phẩm đã hết tài khoản khả dụng."));
+
+        Model model = new ExtendedModelMap();
+
+        String viewName = buyerController.checkout(5, null, model);
+
+        assertEquals("redirect:/marketplace/5?error=unavailable", viewName);
     }
 
     @Test
@@ -120,5 +155,86 @@ class BuyerControllerTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_TxnRef=abc"))
                 .andExpect(flash().attributeExists("successMessage"));
+    }
+
+    @Test
+    void walletCheckoutRedirectsToPurchasesAfterSuccess() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(buyerController).build();
+        User buyer = User.builder().userId(1).username("buyer").build();
+        Order order = Order.builder().orderId(12L).orderNumber("ORD-12").build();
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("buyer", "pw", List.of()));
+        when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
+        when(orderCheckoutService.initiateWalletCheckout(buyer, 9)).thenReturn(order);
+
+        mockMvc.perform(post("/buyer/checkout")
+                        .param("postId", "9")
+                        .param("paymentMethod", "WALLET"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/buyer/purchases?orderId=12"))
+                .andExpect(flash().attributeExists("successMessage"));
+    }
+
+    @Test
+    void walletCheckoutRedirectsBackToCheckoutWhenBalanceIsInsufficient() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(buyerController).build();
+        User buyer = User.builder().userId(1).username("buyer").build();
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("buyer", "pw", List.of()));
+        when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
+        when(orderCheckoutService.initiateWalletCheckout(buyer, 9))
+                .thenThrow(new WalletService.InsufficientBalanceException("Số dư không đủ."));
+
+        mockMvc.perform(post("/buyer/checkout")
+                        .param("postId", "9")
+                        .param("paymentMethod", "WALLET"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/buyer/checkout?postId=9"))
+                .andExpect(flash().attribute("errorMessage", "Số dư không đủ."));
+    }
+
+    @Test
+    void walletCheckoutShowsGenericMessageWhenUnexpectedExceptionOccurs() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(buyerController).build();
+        User buyer = User.builder().userId(1).username("buyer").build();
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("buyer", "pw", List.of()));
+        when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
+        when(orderCheckoutService.initiateWalletCheckout(buyer, 9))
+                .thenThrow(new RuntimeException("database exploded"));
+
+        mockMvc.perform(post("/buyer/checkout")
+                        .param("postId", "9")
+                        .param("paymentMethod", "WALLET"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/buyer/checkout?postId=9"))
+                .andExpect(flash().attribute("errorMessage", "Thanh toán bằng ví thất bại. Vui lòng thử lại."));
+    }
+
+    @Test
+    void topUpValidationErrorRedirectsBackToCheckoutWhenPurchaseIsPending() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(buyerController).build();
+        User buyer = User.builder().userId(1).username("buyer").build();
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("buyer", "pw", List.of()));
+        when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
+        doThrow(new IllegalArgumentException("Số tiền nạp tối thiểu là 10,000 ₫."))
+                .when(walletService)
+                .initiateTopUp(eq(buyer),
+                        eq(BigDecimal.valueOf(5000)),
+                        isNull(),
+                        eq(9),
+                        any());
+
+        mockMvc.perform(post("/buyer/wallet/topup")
+                        .param("amount", "5000")
+                        .param("pendingPostId", "9"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/buyer/checkout?postId=9"))
+                .andExpect(flash().attributeExists("errorMessage"));
     }
 }

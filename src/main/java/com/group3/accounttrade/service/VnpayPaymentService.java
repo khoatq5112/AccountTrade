@@ -3,6 +3,7 @@ package com.group3.accounttrade.service;
 import com.group3.accounttrade.config.VnpayConfig;
 import com.group3.accounttrade.entity.*;
 import com.group3.accounttrade.repository.*;
+import com.group3.accounttrade.service.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -41,6 +42,8 @@ public class VnpayPaymentService {
     private final EscrowTransactionRepository escrowTransactionRepository;
     private final AuditLogRepository auditLogRepository;
     private final CredentialService credentialService;
+    private final WalletService walletService;
+    private final NotificationService notificationService;
 
     /**
      * Generates the VNPAY payment URL for a given order.
@@ -147,7 +150,30 @@ public class VnpayPaymentService {
         String responseCode = params.get("vnp_ResponseCode");
         String transactionStatus = params.get("vnp_TransactionStatus");
         String amountStr = params.get("vnp_Amount");
-        
+
+        // 3a. Handle wallet top-up IPN (TU- prefix)
+        if (txnRef != null && txnRef.startsWith("TU-")) {
+            boolean isSuccess = VnpayConfig.RESPONSE_SUCCESS.equals(responseCode) &&
+                                VnpayConfig.TXN_STATUS_SUCCESS.equals(transactionStatus);
+            if (isSuccess) {
+                try {
+                    walletService.confirmTopUp(txnRef, vnpTransactionNo);
+                    log.info("Top-up IPN confirmed: {}", txnRef);
+                } catch (Exception e) {
+                    log.error("Error confirming top-up via IPN: {}", e.getMessage(), e);
+                }
+            } else {
+                walletService.failTopUp(txnRef);
+                log.info("Top-up IPN failed: {}, responseCode: {}", txnRef, responseCode);
+            }
+            callback.setProcessed(true);
+            callback.setProcessingResult("Top-up IPN processed");
+            paymentCallbackRepository.save(callback);
+            response.put("RspCode", "00");
+            response.put("Message", "Confirm Success");
+            return response;
+        }
+
         // 4. Find the payment by txnRef
         Optional<Payment> paymentOpt = paymentRepository.findByVnpayTxnRef(txnRef);
         if (paymentOpt.isEmpty()) {
@@ -249,9 +275,44 @@ public class VnpayPaymentService {
         
         // 3. Extract key parameters
         String txnRef = params.get("vnp_TxnRef");
+        String vnpTransactionNo = params.get("vnp_TransactionNo");
         String responseCode = params.get("vnp_ResponseCode");
         String transactionStatus = params.get("vnp_TransactionStatus");
-        
+
+        // 3a. Handle wallet top-up return (TU- prefix)
+        if (txnRef != null && txnRef.startsWith("TU-")) {
+            boolean isSuccess = VnpayConfig.RESPONSE_SUCCESS.equals(responseCode) &&
+                                VnpayConfig.TXN_STATUS_SUCCESS.equals(transactionStatus);
+
+            if (isSuccess) {
+                try {
+                    walletService.confirmTopUp(txnRef, vnpTransactionNo);
+                    callback.setProcessingResult("Top-up confirmed via return callback");
+                } catch (Exception e) {
+                    log.error("Error confirming top-up via return callback: {}", e.getMessage(), e);
+                    callback.setProcessed(true);
+                    callback.setProcessingResult("Top-up return confirmation failed");
+                    paymentCallbackRepository.save(callback);
+                    return PaymentResult.failed("Không thể xác nhận nạp tiền vào ví. Vui lòng kiểm tra lại số dư.", null);
+                }
+            } else {
+                callback.setProcessingResult("Top-up return callback");
+            }
+
+            callback.setProcessed(true);
+            paymentCallbackRepository.save(callback);
+
+            Integer pendingPostId = walletService.getPendingPostIdForTopUp(txnRef);
+            if (isSuccess && pendingPostId != null) {
+                return PaymentResult.topUpSuccessWithRedirect(
+                        "Nạp tiền thành công! Bạn có thể tiếp tục mua hàng.", pendingPostId);
+            }
+            if (isSuccess) {
+                return PaymentResult.topUpSuccess("Nạp tiền vào ví thành công!");
+            }
+            return PaymentResult.failed("Nạp tiền thất bại: " + responseCode, null);
+        }
+
         // 4. Find the payment
         Optional<Payment> paymentOpt = paymentRepository.findByVnpayTxnRef(txnRef);
         if (paymentOpt.isEmpty()) {
@@ -334,6 +395,17 @@ public class VnpayPaymentService {
 
         // 4. Assign and deliver the reserved credentials after payment confirmation
         credentialService.assignCredentialsToBuyer(order);
+        notificationService.createNotification(
+                order.getBuyer(),
+                Notification.TYPE_PAYMENT,
+                NotificationPreference.CATEGORY_PAYMENT,
+                "Thanh toán đơn " + order.getOrderNumber() + " thành công",
+                "Hệ thống đã ghi nhận thanh toán thành công cho đơn hàng của bạn.",
+                Notification.PRIORITY_NORMAL,
+                "PAYMENT",
+                payment.getPaymentId(),
+                "/buyer/purchases?orderId=" + order.getOrderId()
+        );
 
         // 5. Create audit log
         createAuditLog(null, "PAYMENT_SUCCESS", AuditLog.EVENT_PAYMENT, payment.getPaymentId(),
@@ -478,23 +550,37 @@ public class VnpayPaymentService {
         private final boolean success;
         private final String message;
         private final Long orderId;
+        private final boolean topUp;
+        private final Integer pendingPostId;
 
-        private PaymentResult(boolean success, String message, Long orderId) {
+        private PaymentResult(boolean success, String message, Long orderId, boolean topUp, Integer pendingPostId) {
             this.success = success;
             this.message = message;
             this.orderId = orderId;
+            this.topUp = topUp;
+            this.pendingPostId = pendingPostId;
         }
 
         public static PaymentResult success(String message, Long orderId) {
-            return new PaymentResult(true, message, orderId);
+            return new PaymentResult(true, message, orderId, false, null);
         }
 
         public static PaymentResult failed(String message, Long orderId) {
-            return new PaymentResult(false, message, orderId);
+            return new PaymentResult(false, message, orderId, false, null);
+        }
+
+        public static PaymentResult topUpSuccess(String message) {
+            return new PaymentResult(true, message, null, true, null);
+        }
+
+        public static PaymentResult topUpSuccessWithRedirect(String message, Integer pendingPostId) {
+            return new PaymentResult(true, message, null, true, pendingPostId);
         }
 
         public boolean isSuccess() { return success; }
         public String getMessage() { return message; }
         public Long getOrderId() { return orderId; }
+        public boolean isTopUp() { return topUp; }
+        public Integer getPendingPostId() { return pendingPostId; }
     }
 }

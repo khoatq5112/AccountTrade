@@ -17,6 +17,7 @@ import com.group3.accounttrade.service.CartService;
 import com.group3.accounttrade.service.CloudinaryService;
 import com.group3.accounttrade.service.DisputeService;
 import com.group3.accounttrade.service.OrderCheckoutService;
+import com.group3.accounttrade.service.WalletService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +55,7 @@ public class BuyerController {
     private final OrderCheckoutService orderCheckoutService;
     private final DisputeService disputeService;
     private final CloudinaryService cloudinaryService;
+    private final WalletService walletService;
 
     @GetMapping("/dashboard")
     public String viewBuyerDashboard(Model model) {
@@ -94,19 +96,32 @@ public class BuyerController {
     }
 
     @GetMapping("/wallet")
-    public String buyerWallet(Model model) {
+    public String buyerWallet(Model model,
+                               @RequestParam(required = false) Boolean topupSuccess,
+                               @RequestParam(required = false) Boolean topupFailed) {
         User user = getCurrentUser();
         if (user == null) {
             return "redirect:/login.html";
         }
         model.addAttribute("currentUser", user);
-        Wallet wallet = walletRepository.findByUser_UserId(user.getUserId()).orElse(null);
-        model.addAttribute("walletBalance", wallet != null ? wallet.getBalance() : BigDecimal.ZERO);
+        BigDecimal walletBalance = walletService.getBalance(user);
+        model.addAttribute("walletBalance", walletBalance);
+        model.addAttribute("minimumTopUpAmount", walletService.getMinimumTopUpAmount());
+        model.addAttribute("transactionHistory", walletService.getTransactionHistory(user));
+        model.addAttribute("topUpHistory", walletService.getTopUpHistory(user));
+        if (Boolean.TRUE.equals(topupSuccess)) {
+            model.addAttribute("successMessage", "Nạp tiền vào ví thành công!");
+        }
+        if (Boolean.TRUE.equals(topupFailed)) {
+            model.addAttribute("errorMessage", "Nạp tiền thất bại. Vui lòng thử lại.");
+        }
         return "buyer_wallet";
     }
 
     @GetMapping("/checkout")
-    public String checkout(@RequestParam Integer postId, Model model) {
+    public String checkout(@RequestParam Integer postId,
+                           @RequestParam(required = false) Boolean topupSuccess,
+                           Model model) {
         User user = getCurrentUser();
         if (user == null) {
             return "redirect:/login.html?redirect=/buyer/checkout?postId=" + postId;
@@ -115,22 +130,28 @@ public class BuyerController {
             return "redirect:/marketplace/" + postId + "?error=seller_restricted";
         }
 
-        Post post = postRepository.findById(postId).orElse(null);
-        if (post == null) {
+        try {
+            OrderCheckoutService.WalletCheckoutPreview preview = orderCheckoutService.previewWalletCheckout(user, postId);
+            model.addAttribute("post", preview.post());
+            model.addAttribute("walletBalance", preview.walletBalance());
+            model.addAttribute("walletDeficit", preview.deficitAmount());
+            model.addAttribute("suggestedTopUpAmount", preview.suggestedTopUpAmount());
+            model.addAttribute("hasSufficientBalance", preview.hasSufficientBalance());
+            model.addAttribute("minimumTopUpAmount", walletService.getMinimumTopUpAmount());
+        } catch (IllegalArgumentException e) {
+            if ("You cannot purchase your own post".equals(e.getMessage())) {
+                return "redirect:/marketplace/" + postId + "?error=own_post";
+            }
             return "redirect:/marketplace?error=not_found";
-        }
-
-        if (post.getSeller() != null && post.getSeller().getUserId().equals(user.getUserId())) {
-            return "redirect:/marketplace/" + postId + "?error=own_post";
-        }
-
-        if (!post.isInStock()) {
+        } catch (IllegalStateException e) {
             return "redirect:/marketplace/" + postId + "?error=unavailable";
         }
 
-        model.addAttribute("post", post);
         model.addAttribute("user", user);
         model.addAttribute("isAuthenticated", true);
+        if (Boolean.TRUE.equals(topupSuccess)) {
+            model.addAttribute("successMessage", "Nạp tiền thành công. Bạn có thể hoàn tất thanh toán bằng ví ngay bây giờ.");
+        }
         return "checkout";
     }
 
@@ -158,6 +179,7 @@ public class BuyerController {
 
     @PostMapping("/checkout")
     public String processCheckout(@RequestParam Integer postId,
+                                  @RequestParam(defaultValue = "VNPAY") String paymentMethod,
                                   HttpServletRequest request,
                                   RedirectAttributes redirectAttributes) {
         User user = getCurrentUser();
@@ -167,6 +189,30 @@ public class BuyerController {
         if (isSellerAccount(user)) {
             redirectAttributes.addFlashAttribute("errorMessage", "Tài khoản seller không thể mua sản phẩm.");
             return "redirect:/marketplace/" + postId;
+        }
+
+        if ("WALLET".equalsIgnoreCase(paymentMethod)) {
+            try {
+                Order order = orderCheckoutService.initiateWalletCheckout(user, postId);
+                redirectAttributes.addFlashAttribute("successMessage",
+                        "Thanh toán bằng ví thành công! Credential đã được giao cho đơn hàng của bạn.");
+                return "redirect:/buyer/purchases?orderId=" + order.getOrderId();
+            } catch (WalletService.InsufficientBalanceException e) {
+                log.warn("[CHECKOUT] Wallet balance insufficient for user {} on post {}: {}",
+                        user.getUsername(), postId, e.getMessage());
+                redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+                return "redirect:/buyer/checkout?postId=" + postId;
+            } catch (IllegalArgumentException | IllegalStateException e) {
+                log.error("[CHECKOUT] Wallet checkout failed validation for user {} (id={}) on post {}",
+                        user.getUsername(), user.getUserId(), postId, e);
+                redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+                return "redirect:/marketplace/" + postId;
+            } catch (Exception e) {
+                log.error("[CHECKOUT] Unexpected wallet checkout failure for user {} (id={}) on post {}",
+                        user.getUsername(), user.getUserId(), postId, e);
+                redirectAttributes.addFlashAttribute("errorMessage", "Thanh toán bằng ví thất bại. Vui lòng thử lại.");
+                return "redirect:/buyer/checkout?postId=" + postId;
+            }
         }
 
         try {
@@ -189,6 +235,31 @@ public class BuyerController {
             redirectAttributes.addFlashAttribute("errorMessage",
                     "Không thể khởi tạo phiên thanh toán cho sản phẩm này.");
             return "redirect:/marketplace/" + postId;
+        }
+    }
+
+    @PostMapping("/wallet/topup")
+    public String initiateTopUp(@RequestParam BigDecimal amount,
+                                 @RequestParam(required = false) BigDecimal requiredAmount,
+                                 @RequestParam(required = false) Integer pendingPostId,
+                                 HttpServletRequest request,
+                                 RedirectAttributes redirectAttributes) {
+        User user = getCurrentUser();
+        if (user == null) {
+            return "redirect:/login.html";
+        }
+        try {
+            String paymentUrl = walletService.initiateTopUp(user, amount, requiredAmount, pendingPostId, request);
+            return "redirect:" + paymentUrl;
+        } catch (IllegalArgumentException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+            return resolveTopUpRedirect(pendingPostId);
+        } catch (IllegalStateException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+            return resolveTopUpRedirect(pendingPostId);
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Không thể khởi tạo nạp tiền. Vui lòng thử lại.");
+            return resolveTopUpRedirect(pendingPostId);
         }
     }
 
@@ -477,5 +548,12 @@ public class BuyerController {
                 && user.getRole() != null
                 && user.getRole().getRoleName() != null
                 && "Seller".equalsIgnoreCase(user.getRole().getRoleName());
+    }
+
+    private String resolveTopUpRedirect(Integer pendingPostId) {
+        if (pendingPostId != null) {
+            return "redirect:/buyer/checkout?postId=" + pendingPostId;
+        }
+        return "redirect:/buyer/wallet";
     }
 }

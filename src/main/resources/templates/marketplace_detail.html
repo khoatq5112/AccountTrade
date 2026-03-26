@@ -57,7 +57,7 @@
     </div>
 
     <div th:if="${param.error != null or errorMessage != null}" class="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-error">
-        <span th:text="${errorMessage != null ? errorMessage : (param.error[0] == 'unavailable' ? 'Sản phẩm hiện không thể mua.' : (param.error[0] == 'seller_restricted' ? 'Tài khoản seller không thể mua sản phẩm.' : 'Bạn không thể mua sản phẩm của chính mình.'))}">Error</span>
+        <span th:text="${errorMessage != null ? errorMessage : (param.error[0] == 'unavailable' ? (purchaseUnavailableMessage != null ? purchaseUnavailableMessage : 'Sản phẩm hiện không thể mua.') : (param.error[0] == 'seller_restricted' ? 'Tài khoản seller không thể mua sản phẩm.' : 'Bạn không thể mua sản phẩm của chính mình.'))}">Error</span>
     </div>
 
     <div class="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
@@ -72,9 +72,9 @@
                         <span th:text="${post.category != null ? post.category.categoryName : 'Chưa phân loại'}">Category</span>
                     </span>
                     <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold"
-                          th:classappend="${post.inStock} ? ' bg-green-50 text-success' : ' bg-amber-50 text-warning'">
+                          th:classappend="${canPurchasePost} ? ' bg-green-50 text-success' : ' bg-amber-50 text-warning'">
                         <i class="ph-fill ph-shield-check"></i>
-                        <span th:text="${post.inStock} ? 'Còn hàng' : 'Hết hàng'">Available</span>
+                        <span th:text="${canPurchasePost} ? 'Còn hàng' : 'Chưa thể mua'">Available</span>
                     </span>
                 </div>
 
@@ -127,7 +127,7 @@
         <aside class="space-y-6">
             <section class="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
                 <h2 class="text-xl font-bold mb-4">Thao tác nhanh</h2>
-                <div th:if="${canPurchase and post.inStock}" class="space-y-3">
+                <div th:if="${canPurchase and canPurchasePost}" class="space-y-3">
                     <button type="button" th:onclick="'buyNow(' + ${post.postId} + ')'" class="w-full rounded-2xl bg-primary px-4 py-3 text-white font-bold hover:bg-primary-dark transition-colors">
                         Mua ngay
                     </button>
@@ -135,12 +135,12 @@
                         Thêm vào giỏ hàng
                     </button>
                 </div>
-                <div th:if="${canPurchase and !post.inStock}" class="space-y-3">
+                <div th:if="${canPurchase and !canPurchasePost}" class="space-y-3">
                     <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
-                        Sản phẩm hiện đã hết hàng. Bạn vẫn có thể xem thông tin, nhưng chưa thể mua hoặc thêm vào giỏ.
+                        <span th:text="${purchaseUnavailableMessage != null ? purchaseUnavailableMessage : 'Sản phẩm hiện không thể mua hoặc thêm vào giỏ.'}">Sản phẩm hiện không thể mua.</span>
                     </div>
                     <button type="button" disabled class="w-full cursor-not-allowed rounded-2xl bg-gray-100 px-4 py-3 font-bold text-gray-400">
-                        Hết hàng
+                        Chưa thể mua
                     </button>
                     <button type="button" disabled class="w-full cursor-not-allowed rounded-2xl border border-gray-200 px-4 py-3 font-bold text-gray-400">
                         Thêm vào giỏ hàng

@@ -16,7 +16,9 @@
                         primary: '#137fec',
                         'primary-dark': '#0d6ed9',
                         surface: '#f5f7fa',
-                        success: '#22c55e'
+                        success: '#22c55e',
+                        warning: '#f59e0b',
+                        error: '#ef4444'
                     },
                     fontFamily: { sans: ['Manrope', 'sans-serif'] }
                 }
@@ -25,14 +27,17 @@
     </script>
 </head>
 <body class="font-sans antialiased bg-surface text-gray-900">
-<main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div class="mb-8">
-        <p class="text-sm text-gray-500 mb-2">Bước cuối của buyer flow</p>
-        <h1 class="text-3xl font-extrabold">Xác nhận checkout</h1>
-        <p class="text-gray-500 mt-2">TrustBridge sẽ giữ credential ở trạng thái holding, tạo đơn chờ thanh toán và chỉ giao sau khi VNPAY xác nhận thành công.</p>
+        <p class="text-sm text-gray-500 mb-2">Buyer checkout</p>
+        <h1 class="text-3xl font-extrabold">Xác nhận thanh toán</h1>
+        <p class="text-gray-500 mt-2">Bạn có thể thanh toán trực tiếp bằng ví hoặc tiếp tục sang VNPAY. TrustBridge chỉ giao credential sau khi thanh toán được xác nhận và escrow được tạo.</p>
     </div>
 
-    <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+    <div th:if="${successMessage}" class="mb-6 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700" th:text="${successMessage}"></div>
+    <div th:if="${errorMessage}" class="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" th:text="${errorMessage}"></div>
+
+    <div class="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
         <section class="rounded-3xl bg-white border border-gray-100 shadow-sm p-6 sm:p-8">
             <div class="flex flex-col sm:flex-row gap-5">
                 <div class="w-full sm:w-48 h-36 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center overflow-hidden">
@@ -56,31 +61,248 @@
                     <p class="font-bold" th:text="${post.seller != null ? post.seller.username : 'TrustBridge Seller'}">seller</p>
                 </div>
             </div>
+
+            <section class="mt-8 rounded-3xl border border-blue-100 bg-blue-50/70 p-5">
+                <div class="flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                        <p class="text-sm text-blue-700 font-semibold">Số dư ví hiện tại</p>
+                        <p class="text-2xl font-extrabold text-blue-950" th:text="${#numbers.formatDecimal(walletBalance, 0, 'COMMA', 0, 'POINT') + ' ₫'}">0 ₫</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm text-gray-500">Tổng thanh toán</p>
+                        <p class="text-xl font-bold" th:text="${#numbers.formatDecimal(post.price, 0, 'COMMA', 0, 'POINT') + ' ₫'}">0 ₫</p>
+                    </div>
+                </div>
+
+                <div th:if="${hasSufficientBalance}" class="mt-4 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                    Ví của bạn đủ số dư để hoàn tất đơn hàng ngay lập tức.
+                </div>
+
+                <div th:unless="${hasSufficientBalance}" class="mt-4 space-y-4">
+                    <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+                        <p class="text-sm font-semibold text-amber-700">Số dư chưa đủ</p>
+                        <p class="mt-1 text-gray-700">Bạn cần nạp thêm ít nhất
+                            <strong th:text="${#numbers.formatDecimal(walletDeficit, 0, 'COMMA', 0, 'POINT') + ' ₫'}">0 ₫</strong>
+                            để mua sản phẩm này.
+                        </p>
+                        <p class="mt-2 text-sm text-gray-600">Hệ thống đã gợi ý mức nạp theo phần thiếu, nhưng bạn có thể nhập số lớn hơn nếu muốn.</p>
+                    </div>
+
+                    <form th:action="@{/buyer/wallet/topup}" method="post" class="rounded-3xl border border-gray-200 bg-white p-5 space-y-4">
+                        <input type="hidden" name="pendingPostId" th:value="${post.postId}">
+                        <input type="hidden" name="requiredAmount" th:value="${walletDeficit}">
+                        <input type="hidden"
+                               id="topup-amount-hidden"
+                               name="amount"
+                               th:value="${suggestedTopUpAmount != null ? suggestedTopUpAmount.stripTrailingZeros().toPlainString() : ''}">
+                        <div>
+                            <label for="topup-amount" class="block text-sm font-semibold text-gray-700 mb-2">Số tiền nạp</label>
+                            <input id="topup-amount"
+                                   type="text"
+                                   inputmode="numeric"
+                                   autocomplete="off"
+                                   th:value="${suggestedTopUpAmount != null ? #numbers.formatDecimal(suggestedTopUpAmount, 0, 'COMMA', 0, 'POINT') : ''}"
+                                   class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary"
+                                   required>
+                            <p class="mt-2 text-xs text-gray-500">Nạp tối thiểu <span th:text="${#numbers.formatDecimal(minimumTopUpAmount, 0, 'COMMA', 0, 'POINT')}">10,000</span> ₫.</p>
+                        </div>
+                        <button type="submit" class="w-full rounded-2xl bg-amber-500 px-4 py-3 text-white font-bold hover:bg-amber-600">
+                            Nạp tiền để tiếp tục mua hàng
+                        </button>
+                    </form>
+                </div>
+            </section>
         </section>
 
         <aside class="space-y-4">
             <section class="rounded-3xl bg-white border border-gray-100 shadow-sm p-6">
-                <h2 class="text-xl font-bold mb-4">Điều gì sẽ xảy ra tiếp theo?</h2>
+                <h2 class="text-xl font-bold mb-4">Thanh toán bằng ví</h2>
+                <p class="text-sm text-gray-600">Ví sẽ bị trừ đúng số tiền của đơn hàng. Sau đó hệ thống tạo payment record, escrow hold và bàn giao credential trong cùng luồng xử lý.</p>
+
+                <form id="walletCheckoutForm" th:action="@{/buyer/checkout}" method="post" class="mt-6 space-y-3">
+                    <input type="hidden" name="postId" th:value="${post.postId}">
+                    <input type="hidden" name="paymentMethod" value="WALLET">
+                    <button id="openWalletConfirmDialog"
+                            type="button"
+                            th:disabled="${!hasSufficientBalance}"
+                            th:classappend="${!hasSufficientBalance} ? ' opacity-50 cursor-not-allowed' : ''"
+                            th:attr="data-post-title=${post.title},data-wallet-balance=${#numbers.formatDecimal(walletBalance, 0, 'COMMA', 0, 'POINT') + ' ₫'},data-total-amount=${#numbers.formatDecimal(post.price, 0, 'COMMA', 0, 'POINT') + ' ₫'}"
+                            class="w-full rounded-2xl bg-primary px-4 py-3 text-white font-bold hover:bg-primary-dark">
+                        Thanh toán bằng ví
+                    </button>
+                </form>
+
+                <div class="mt-4 rounded-2xl bg-gray-50 px-4 py-4 text-sm text-gray-600">
+                    <p>Thiếu tiền? Nạp ví ở khung bên trái, sau khi VNPAY xác nhận bạn sẽ quay lại đúng trang checkout này để tiếp tục.</p>
+                </div>
+            </section>
+
+            <section class="rounded-3xl bg-white border border-gray-100 shadow-sm p-6">
+                <h2 class="text-xl font-bold mb-4">Tiếp tục với VNPAY</h2>
                 <ol class="space-y-3 text-sm text-gray-600">
                     <li>1. TrustBridge tạo đơn hàng ở trạng thái <strong>Awaiting Payment</strong>.</li>
-                    <li>2. Credential khả dụng sẽ được chuyển sang <strong>Holding</strong> để giữ chỗ cho bạn.</li>
-                    <li>3. Bạn được chuyển sang VNPAY để thanh toán.</li>
-                    <li>4. Chỉ sau khi IPN xác nhận thành công, escrow và bước giao credential mới được tiếp tục.</li>
+                    <li>2. Credential khả dụng được chuyển sang <strong>Holding</strong> để giữ chỗ.</li>
+                    <li>3. Bạn thanh toán tại cổng VNPAY.</li>
+                    <li>4. Khi IPN xác nhận thành công, escrow và bàn giao credential mới tiếp tục.</li>
                 </ol>
 
                 <form th:action="@{/buyer/checkout}" method="post" class="mt-6 space-y-3">
                     <input type="hidden" name="postId" th:value="${post.postId}">
-                    <button type="submit" class="w-full rounded-2xl bg-primary px-4 py-3 text-white font-bold hover:bg-primary-dark">Tiếp tục tới VNPAY</button>
-                    <a th:href="@{/marketplace/{postId}(postId=${post.postId})}" class="block w-full rounded-2xl border border-gray-200 px-4 py-3 text-center font-bold text-gray-700 hover:bg-gray-50">Quay lại chi tiết sản phẩm</a>
+                    <input type="hidden" name="paymentMethod" value="VNPAY">
+                    <button type="submit" class="w-full rounded-2xl border border-gray-200 px-4 py-3 text-gray-800 font-bold hover:bg-gray-50">
+                        Tiếp tục tới VNPAY
+                    </button>
+                    <a th:href="@{/marketplace/{postId}(postId=${post.postId})}" class="block w-full rounded-2xl border border-gray-200 px-4 py-3 text-center font-bold text-gray-700 hover:bg-gray-50">
+                        Quay lại chi tiết sản phẩm
+                    </a>
                 </form>
             </section>
 
             <section class="rounded-3xl bg-green-50 border border-green-100 p-6">
-                <h2 class="font-bold text-success mb-2">Không hiển thị credential</h2>
-                <p class="text-sm text-gray-600">Thông tin tài khoản gốc vẫn được giữ kín ở bước này. Buyer chỉ nhận tiến trình xử lý giao dịch, không thấy thông tin nhạy cảm trước khi hệ thống trung gian tiếp nhận.</p>
+                <h2 class="font-bold text-success mb-2">Thông tin credential vẫn được bảo vệ</h2>
+                <p class="text-sm text-gray-600">Buyer chỉ thấy credential sau khi đơn hàng đã được thanh toán thành công và TrustBridge hoàn tất bước giao an toàn.</p>
             </section>
         </aside>
     </div>
 </main>
+
+<div id="walletConfirmDialog" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 px-4">
+    <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <p class="text-sm font-semibold text-primary">Xác nhận thanh toán bằng ví</p>
+                <h2 class="mt-2 text-2xl font-extrabold text-gray-900">Bạn muốn thanh toán đơn hàng này ngay bây giờ?</h2>
+            </div>
+            <button id="closeWalletConfirmDialog"
+                    type="button"
+                    class="rounded-full p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                    aria-label="Đóng hộp thoại xác nhận">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="mt-6 rounded-3xl border border-blue-100 bg-blue-50/70 p-5">
+            <div class="flex items-center justify-between gap-4">
+                <span class="text-sm text-gray-500">Sản phẩm</span>
+                <span id="walletConfirmPostTitle" class="text-right font-bold text-gray-900">Post title</span>
+            </div>
+            <div class="mt-4 flex items-center justify-between gap-4">
+                <span class="text-sm text-gray-500">Số dư ví hiện tại</span>
+                <span id="walletConfirmBalance" class="font-bold text-blue-950">0 ₫</span>
+            </div>
+            <div class="mt-3 flex items-center justify-between gap-4">
+                <span class="text-sm text-gray-500">Số tiền sẽ bị trừ</span>
+                <span id="walletConfirmAmount" class="text-xl font-extrabold text-primary">0 ₫</span>
+            </div>
+        </div>
+
+        <p class="mt-5 text-sm leading-6 text-gray-600">
+            Khi bạn xác nhận, TrustBridge sẽ trừ tiền trong ví, tạo payment record, escrow hold và giao credential trong cùng luồng xử lý.
+        </p>
+
+        <div class="mt-6 grid gap-3 sm:grid-cols-2">
+            <button id="cancelWalletConfirmDialog"
+                    type="button"
+                    class="w-full rounded-2xl border border-gray-200 px-4 py-3 font-bold text-gray-700 hover:bg-gray-50">
+                Kiểm tra lại
+            </button>
+            <button id="confirmWalletCheckout"
+                    type="button"
+                    class="w-full rounded-2xl bg-primary px-4 py-3 font-bold text-white hover:bg-primary-dark">
+                Xác nhận thanh toán
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    (() => {
+        const openButton = document.getElementById('openWalletConfirmDialog');
+        const dialog = document.getElementById('walletConfirmDialog');
+        const closeButton = document.getElementById('closeWalletConfirmDialog');
+        const cancelButton = document.getElementById('cancelWalletConfirmDialog');
+        const confirmButton = document.getElementById('confirmWalletCheckout');
+        const walletForm = document.getElementById('walletCheckoutForm');
+        const postTitle = document.getElementById('walletConfirmPostTitle');
+        const balance = document.getElementById('walletConfirmBalance');
+        const amount = document.getElementById('walletConfirmAmount');
+
+        if (!openButton || !dialog || !walletForm) {
+            return;
+        }
+
+        const openDialog = () => {
+            postTitle.textContent = openButton.dataset.postTitle || '';
+            balance.textContent = openButton.dataset.walletBalance || '';
+            amount.textContent = openButton.dataset.totalAmount || '';
+            dialog.classList.remove('hidden');
+            dialog.classList.add('flex');
+            confirmButton.focus();
+        };
+
+        const closeDialog = () => {
+            dialog.classList.add('hidden');
+            dialog.classList.remove('flex');
+            openButton.focus();
+        };
+
+        openButton.addEventListener('click', openDialog);
+        closeButton.addEventListener('click', closeDialog);
+        cancelButton.addEventListener('click', closeDialog);
+
+        dialog.addEventListener('click', (event) => {
+            if (event.target === dialog) {
+                closeDialog();
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && !dialog.classList.contains('hidden')) {
+                closeDialog();
+            }
+        });
+
+        confirmButton.addEventListener('click', () => {
+            confirmButton.disabled = true;
+            confirmButton.textContent = 'Đang xử lý...';
+            walletForm.submit();
+        });
+    })();
+
+    (() => {
+        const topUpInput = document.getElementById('topup-amount');
+        const hiddenTopUpInput = document.getElementById('topup-amount-hidden');
+
+        if (!topUpInput || !hiddenTopUpInput) {
+            return;
+        }
+
+        const formatAmount = (rawValue) => {
+            const digits = rawValue.replace(/\D/g, '');
+            if (!digits) {
+                return '';
+            }
+            return new Intl.NumberFormat('en-US').format(Number(digits));
+        };
+
+        const syncHiddenValue = () => {
+            hiddenTopUpInput.value = topUpInput.value.replace(/\D/g, '');
+        };
+
+        topUpInput.addEventListener('input', () => {
+            const digits = topUpInput.value.replace(/\D/g, '');
+            topUpInput.value = formatAmount(digits);
+            syncHiddenValue();
+        });
+
+        topUpInput.form?.addEventListener('submit', () => {
+            syncHiddenValue();
+        });
+
+        syncHiddenValue();
+    })();
+</script>
 </body>
 </html>

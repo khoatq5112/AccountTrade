@@ -2,6 +2,7 @@ package com.group3.accounttrade.service;
 
 import com.group3.accounttrade.entity.*;
 import com.group3.accounttrade.repository.*;
+import com.group3.accounttrade.service.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -9,8 +10,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Service for managing credential operations in the transaction workflow.
@@ -36,7 +39,8 @@ public class CredentialService {
     private final OrderItemRepository orderItemRepository;
     private final OrderStatusRepository orderStatusRepository;
     private final AuditLogRepository auditLogRepository;
-    private final NotificationRepository notificationRepository;
+    private final NotificationService notificationService;
+    private final PostService postService;
 
     // Credential status constants (matching existing CredentialStatus entity)
     public static final String STATUS_AVAILABLE = "Available";
@@ -92,6 +96,8 @@ public class CredentialService {
             credential.setCredentialStatus(holdingStatus);
             postCredentialRepository.save(credential);
         }
+
+        syncPostStockStatus(post);
 
         // Create audit log
         createAuditLog(orderItem.getOrder().getBuyer(), "CREDENTIALS_RESERVED", "Post", post.getPostId().longValue(),
@@ -235,6 +241,8 @@ public class CredentialService {
                 assignment.setConfirmedAt(LocalDateTime.now());
                 credentialAssignmentRepository.save(assignment);
             }
+
+            syncPostStockStatus(item.getPost());
         }
 
         // Create audit log
@@ -299,6 +307,7 @@ public class CredentialService {
         // Mark replacement as holding
         replacementCredential.setCredentialStatus(holdingStatus);
         postCredentialRepository.save(replacementCredential);
+        syncPostStockStatus(replacementCredential.getPost());
 
         // Create new assignment for replacement
         CredentialAssignment newAssignment = CredentialAssignment.builder()
@@ -340,9 +349,17 @@ public class CredentialService {
         CredentialStatus availableStatus = credentialStatusRepository.findByStatusName(STATUS_AVAILABLE)
                 .orElseThrow(() -> new IllegalStateException("Available status not found"));
 
+        Set<Integer> affectedPostIds = new LinkedHashSet<>();
         for (PostCredential credential : credentials) {
             credential.setCredentialStatus(availableStatus);
             postCredentialRepository.save(credential);
+            if (credential.getPost() != null && credential.getPost().getPostId() != null) {
+                affectedPostIds.add(credential.getPost().getPostId());
+            }
+        }
+
+        for (Integer postId : affectedPostIds) {
+            syncPostStockStatus(postId);
         }
 
         log.info("Released {} reserved credentials", credentials.size());
@@ -370,6 +387,8 @@ public class CredentialService {
                 postCredentialRepository.save(credential);
                 releasedCount++;
             }
+
+            syncPostStockStatus(item.getPost());
         }
 
         // Create audit log
@@ -441,6 +460,20 @@ public class CredentialService {
         return available >= quantity;
     }
 
+    private void syncPostStockStatus(Post post) {
+        if (post == null || post.getPostId() == null) {
+            return;
+        }
+        syncPostStockStatus(post.getPostId());
+    }
+
+    private void syncPostStockStatus(Integer postId) {
+        if (postId == null) {
+            return;
+        }
+        postService.updateStockStatus(postId);
+    }
+
     /**
      * Gets credential assignment history for a buyer.
      *
@@ -495,16 +528,16 @@ public class CredentialService {
      * Notifies the buyer about credential updates.
      */
     private void notifyBuyer(Order order, String title, String message) {
-        Notification notification = Notification.builder()
-                .user(order.getBuyer())
-                .notificationType(Notification.TYPE_CREDENTIAL)
-                .title(title)
-                .message(message)
-                .relatedEntityType("ORDER")
-                .relatedEntityId(order.getOrderId())
-                .priority(Notification.PRIORITY_HIGH)
-                .build();
-
-        notificationRepository.save(notification);
+        notificationService.createNotification(
+                order.getBuyer(),
+                Notification.TYPE_CREDENTIAL,
+                NotificationPreference.CATEGORY_CREDENTIAL,
+                title,
+                message,
+                Notification.PRIORITY_HIGH,
+                "ORDER",
+                order.getOrderId(),
+                "/buyer/purchases?orderId=" + order.getOrderId()
+        );
     }
 }
