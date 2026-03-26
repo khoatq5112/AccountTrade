@@ -2,6 +2,7 @@ package com.group3.accounttrade.controller;
 
 import com.group3.accounttrade.entity.User;
 import com.group3.accounttrade.repository.UserRepository;
+import com.group3.accounttrade.service.CommissionService;
 import com.group3.accounttrade.service.WalletService;
 import com.group3.accounttrade.service.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ public class NavbarModelAdvice {
 
     private final UserRepository userRepository;
     private final WalletService walletService;
+    private final CommissionService commissionService;
     private final NotificationService notificationService;
 
     @ModelAttribute
@@ -29,7 +31,7 @@ public class NavbarModelAdvice {
 
         userRepository.findByUsername(authentication.getName()).ifPresent(user -> {
             model.addAttribute("currentUser", user);
-            model.addAttribute("navbarWalletBalance", walletService.getBalance(user));
+            model.addAttribute("navbarWalletBalance", resolveNavbarWalletBalance(user));
             model.addAttribute("navbarUnreadNotificationCount",
                     notificationService.getUnreadCount(user.getUserId()).getTotalCount());
             model.addAttribute("navbarRoleLabel", toRoleLabel(user));
@@ -70,6 +72,14 @@ public class NavbarModelAdvice {
             return "/seller/dashboard";
         }
         return "/buyer/wallet";
+    }
+
+    private java.math.BigDecimal resolveNavbarWalletBalance(User user) {
+        if ("Admin".equalsIgnoreCase(getRoleName(user))) {
+            java.math.BigDecimal totalEarnings = commissionService.getTotalEarnings();
+            return totalEarnings != null ? totalEarnings : java.math.BigDecimal.ZERO;
+        }
+        return walletService.getBalance(user);
     }
 
     private String buildInitials(User user) {
