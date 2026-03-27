@@ -202,7 +202,7 @@ public class VnpayPaymentService {
         }
 
         // 4. Find the payment by txnRef
-        Optional<Payment> paymentOpt = paymentRepository.findByVnpayTxnRef(txnRef);
+        Optional<Payment> paymentOpt = paymentRepository.findLockedByVnpayTxnRef(txnRef);
         if (paymentOpt.isEmpty()) {
             log.warn("IPN callback: Payment not found for txnRef: {}", txnRef);
             callback.setProcessed(true);
@@ -308,36 +308,45 @@ public class VnpayPaymentService {
 
         // 3a. Handle wallet top-up return (TU- prefix)
         if (txnRef != null && txnRef.startsWith("TU-")) {
-            boolean isSuccess = VnpayConfig.RESPONSE_SUCCESS.equals(responseCode) &&
-                                VnpayConfig.TXN_STATUS_SUCCESS.equals(transactionStatus);
-
-            if (isSuccess) {
+            boolean callbackSuccess = VnpayConfig.RESPONSE_SUCCESS.equals(responseCode) &&
+                    VnpayConfig.TXN_STATUS_SUCCESS.equals(transactionStatus);
+            boolean sandboxReturnConfirmed = false;
+            if (callbackSuccess && vnpayConfig.isSandboxMode()) {
                 try {
                     walletService.confirmTopUp(txnRef, vnpTransactionNo);
-                    callback.setProcessingResult("Top-up confirmed via return callback");
+                    log.info("Sandbox return callback confirmed top-up before IPN: {}", txnRef);
+                    sandboxReturnConfirmed = true;
                 } catch (Exception e) {
-                    log.error("Error confirming top-up via return callback: {}", e.getMessage(), e);
-                    callback.setProcessed(true);
-                    callback.setProcessingResult("Top-up return confirmation failed");
-                    paymentCallbackRepository.save(callback);
-                    return PaymentResult.failed("Không thể xác nhận nạp tiền vào ví. Vui lòng kiểm tra lại số dư.", null);
+                    log.warn("Sandbox return callback could not confirm top-up {} yet: {}", txnRef, e.getMessage());
                 }
-            } else {
-                callback.setProcessingResult("Top-up return callback");
             }
 
+            String topUpStatus = walletService.getTopUpStatus(txnRef);
             callback.setProcessed(true);
+            callback.setProcessingResult("Top-up return callback observed with status: " + topUpStatus);
+            callback.setProcessedAt(LocalDateTime.now());
             paymentCallbackRepository.save(callback);
 
             Integer pendingPostId = walletService.getPendingPostIdForTopUp(txnRef);
-            if (isSuccess && pendingPostId != null) {
+            if (WalletTopUp.STATUS_COMPLETED.equals(topUpStatus) && pendingPostId != null) {
+                if (sandboxReturnConfirmed) {
+                    return PaymentResult.topUpSandboxReturnConfirmedWithRedirect(
+                            "Nạp tiền thành công ngay trên callback RETURN của sandbox.", pendingPostId);
+                }
                 return PaymentResult.topUpSuccessWithRedirect(
                         "Nạp tiền thành công! Bạn có thể tiếp tục mua hàng.", pendingPostId);
             }
-            if (isSuccess) {
+            if (WalletTopUp.STATUS_COMPLETED.equals(topUpStatus)) {
+                if (sandboxReturnConfirmed) {
+                    return PaymentResult.topUpSandboxReturnConfirmed(
+                            "Nạp tiền thành công ngay trên callback RETURN của sandbox.");
+                }
                 return PaymentResult.topUpSuccess("Nạp tiền vào ví thành công!");
             }
-            return PaymentResult.failed("Nạp tiền thất bại: " + responseCode, null);
+            if (WalletTopUp.STATUS_FAILED.equals(topUpStatus) || !callbackSuccess) {
+                return PaymentResult.failed("Nạp tiền thất bại: " + responseCode, null);
+            }
+            return PaymentResult.topUpPending("Giao dịch nạp tiền đang chờ xác nhận từ VNPAY.", pendingPostId);
         }
 
         // 4. Find the payment
@@ -663,29 +672,46 @@ public class VnpayPaymentService {
         private final Long orderId;
         private final boolean topUp;
         private final Integer pendingPostId;
+        private final boolean pending;
+        private final boolean sandboxReturnConfirmed;
 
-        private PaymentResult(boolean success, String message, Long orderId, boolean topUp, Integer pendingPostId) {
+        private PaymentResult(boolean success, String message, Long orderId, boolean topUp,
+                              Integer pendingPostId, boolean pending, boolean sandboxReturnConfirmed) {
             this.success = success;
             this.message = message;
             this.orderId = orderId;
             this.topUp = topUp;
             this.pendingPostId = pendingPostId;
+            this.pending = pending;
+            this.sandboxReturnConfirmed = sandboxReturnConfirmed;
         }
 
         public static PaymentResult success(String message, Long orderId) {
-            return new PaymentResult(true, message, orderId, false, null);
+            return new PaymentResult(true, message, orderId, false, null, false, false);
         }
 
         public static PaymentResult failed(String message, Long orderId) {
-            return new PaymentResult(false, message, orderId, false, null);
+            return new PaymentResult(false, message, orderId, false, null, false, false);
         }
 
         public static PaymentResult topUpSuccess(String message) {
-            return new PaymentResult(true, message, null, true, null);
+            return new PaymentResult(true, message, null, true, null, false, false);
         }
 
         public static PaymentResult topUpSuccessWithRedirect(String message, Integer pendingPostId) {
-            return new PaymentResult(true, message, null, true, pendingPostId);
+            return new PaymentResult(true, message, null, true, pendingPostId, false, false);
+        }
+
+        public static PaymentResult topUpSandboxReturnConfirmed(String message) {
+            return new PaymentResult(true, message, null, true, null, false, true);
+        }
+
+        public static PaymentResult topUpSandboxReturnConfirmedWithRedirect(String message, Integer pendingPostId) {
+            return new PaymentResult(true, message, null, true, pendingPostId, false, true);
+        }
+
+        public static PaymentResult topUpPending(String message, Integer pendingPostId) {
+            return new PaymentResult(false, message, null, true, pendingPostId, true, false);
         }
 
         public boolean isSuccess() { return success; }
@@ -693,5 +719,7 @@ public class VnpayPaymentService {
         public Long getOrderId() { return orderId; }
         public boolean isTopUp() { return topUp; }
         public Integer getPendingPostId() { return pendingPostId; }
+        public boolean isPending() { return pending; }
+        public boolean isSandboxReturnConfirmed() { return sandboxReturnConfirmed; }
     }
 }

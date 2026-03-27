@@ -69,32 +69,31 @@ public class CredentialService {
      */
     @Transactional
     public List<PostCredential> reserveCredentials(Post post, int quantity, OrderItem orderItem) {
-        // Get available credentials for this post
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Quantity must be greater than 0");
+        }
+
         CredentialStatus availableStatus = credentialStatusRepository.findByStatusName(STATUS_AVAILABLE)
                 .orElseThrow(() -> new IllegalStateException("Available status not found"));
+        CredentialStatus holdingStatus = credentialStatusRepository.findByStatusName(STATUS_HOLDING)
+                .orElseThrow(() -> new IllegalStateException("Holding status not found"));
 
-        List<PostCredential> availableCredentials = new ArrayList<>();
+        List<PostCredential> reservedCredentials = new ArrayList<>();
         for (int i = 0; i < quantity; i++) {
             Optional<PostCredential> credentialOpt = postCredentialRepository
-                    .findFirstByPost_PostIdAndCredentialStatusOrderByCreatedAtAsc(post.getPostId(), availableStatus);
+                    .findFirstByPost_PostIdAndCredentialStatus_StatusNameOrderByCreatedAtAsc(
+                            post.getPostId(),
+                            STATUS_AVAILABLE);
             if (credentialOpt.isEmpty()) {
-                // Release any already reserved credentials
-                releaseCredentialsReservation(availableCredentials);
+                releaseCredentialsReservation(reservedCredentials);
                 throw new IllegalStateException(
                         String.format("Not enough credentials available. Requested: %d, Available: %d",
                                 quantity, i));
             }
-            availableCredentials.add(credentialOpt.get());
-        }
-
-        // Get holding status
-        CredentialStatus holdingStatus = credentialStatusRepository.findByStatusName(STATUS_HOLDING)
-                .orElseThrow(() -> new IllegalStateException("Holding status not found"));
-
-        // Mark credentials as holding
-        for (PostCredential credential : availableCredentials) {
+            PostCredential credential = credentialOpt.get();
             credential.setCredentialStatus(holdingStatus);
             postCredentialRepository.save(credential);
+            reservedCredentials.add(credential);
         }
 
         syncPostStockStatus(post);
@@ -107,7 +106,7 @@ public class CredentialService {
 
         log.info("Reserved {} credentials for post: {}, order: {}", quantity, post.getPostId(), orderItem.getOrder().getOrderNumber());
 
-        return availableCredentials;
+        return reservedCredentials;
     }
 
     /**
@@ -233,6 +232,10 @@ public class CredentialService {
             List<CredentialAssignment> assignments = credentialAssignmentRepository.findByOrderItem(item);
 
             for (CredentialAssignment assignment : assignments) {
+                if (ASSIGNMENT_REPLACED.equalsIgnoreCase(assignment.getAssignmentStatus())
+                        || ASSIGNMENT_REVOKED.equalsIgnoreCase(assignment.getAssignmentStatus())) {
+                    continue;
+                }
                 PostCredential credential = assignment.getCredential();
                 credential.setCredentialStatus(soldStatus);
                 postCredentialRepository.save(credential);
@@ -316,6 +319,11 @@ public class CredentialService {
                 .assignmentStatus(ASSIGNMENT_ASSIGNED)
                 .build();
         credentialAssignmentRepository.save(newAssignment);
+
+        OrderItem orderItem = originalAssignment.getOrderItem();
+        orderItem.setAssignedCredential(replacementCredential);
+        orderItem.setCredentialAssignedAt(LocalDateTime.now());
+        orderItemRepository.save(orderItem);
 
         // Link the assignments
         newAssignment.setReplacedByAssignment(originalAssignment);

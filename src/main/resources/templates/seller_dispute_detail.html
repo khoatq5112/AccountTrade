@@ -141,7 +141,9 @@
             </aside>
 
             <!-- Main Content -->
-            <main class="flex-1 space-y-6">
+            <main class="flex-1 min-w-0">
+                <div class="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
+                    <div class="space-y-6 min-w-0">
                 <!-- Dispute Header -->
                 <div class="card">
                     <div class="flex justify-between items-start mb-4">
@@ -197,10 +199,15 @@
                     <!-- Buyer Evidence -->
                     <div class="mb-6">
                         <h3 class="text-sm font-bold text-gray-700 mb-2">Bằng chứng từ người mua</h3>
-                        <div th:if="${dispute.buyerEvidence}" class="bg-red-50 border border-red-100 rounded-lg p-4">
-                            <p class="text-gray-700 whitespace-pre-wrap" th:text="${dispute.buyerEvidence}">Buyer evidence...</p>
+                        <div th:if="${dispute.buyerEvidenceText != null or !#lists.isEmpty(dispute.buyerEvidenceImages)}" class="bg-red-50 border border-red-100 rounded-lg p-4">
+                            <p th:if="${dispute.buyerEvidenceText != null}" class="text-gray-700 whitespace-pre-wrap" th:text="${dispute.buyerEvidenceText}">Buyer evidence...</p>
+                            <div th:if="${!#lists.isEmpty(dispute.buyerEvidenceImages)}" class="mt-4 grid grid-cols-2 md:grid-cols-3 gap-3">
+                                <a th:each="imageUrl : ${dispute.buyerEvidenceImages}" th:href="${imageUrl}" target="_blank" class="block">
+                                    <img th:src="${imageUrl}" alt="Buyer evidence" class="w-full h-32 object-cover rounded-lg border border-red-200 hover:opacity-80 transition-opacity">
+                                </a>
+                            </div>
                         </div>
-                        <div th:unless="${dispute.buyerEvidence}" class="text-gray-500 text-sm italic">
+                        <div th:unless="${dispute.buyerEvidenceText != null or !#lists.isEmpty(dispute.buyerEvidenceImages)}" class="text-gray-500 text-sm italic">
                             Người mua chưa cung cấp bằng chứng.
                         </div>
                     </div>
@@ -210,9 +217,19 @@
                         <h3 class="text-sm font-bold text-gray-700 mb-2">Phản hồi của bạn</h3>
                         <div class="bg-green-50 border border-green-100 rounded-lg p-4">
                             <p class="text-gray-700 whitespace-pre-wrap" th:text="${dispute.sellerResponse}">Seller response...</p>
-                            <div th:if="${dispute.sellerEvidence}" class="mt-3 pt-3 border-t border-green-200">
+                            <div th:if="${dispute.sellerEvidenceText != null or !#lists.isEmpty(dispute.sellerEvidenceImages)}" class="mt-3 pt-3 border-t border-green-200">
                                 <span class="text-xs font-bold text-gray-500">Bằng chứng đính kèm:</span>
-                                <p class="text-gray-600 text-sm mt-1" th:text="${dispute.sellerEvidence}">Seller evidence...</p>
+                                <p th:if="${dispute.sellerEvidenceText != null}" class="text-gray-600 text-sm mt-1 whitespace-pre-wrap" th:text="${dispute.sellerEvidenceText}">Seller evidence...</p>
+                                <div th:if="${!#lists.isEmpty(dispute.sellerEvidenceImages)}" class="mt-3 grid grid-cols-2 md:grid-cols-3 gap-3">
+                                    <a th:each="imageUrl : ${dispute.sellerEvidenceImages}" th:href="${imageUrl}" target="_blank" class="block">
+                                        <img th:src="${imageUrl}" alt="Seller evidence" class="w-full h-28 object-cover rounded-lg border border-green-200 hover:opacity-80 transition-opacity">
+                                    </a>
+                                </div>
+                            </div>
+                            <div th:if="${dispute.sellerProposalType}" class="mt-3 pt-3 border-t border-green-200">
+                                <span class="text-xs font-bold text-gray-500">Phương án bạn đã đề xuất:</span>
+                                <div class="text-gray-900 font-bold mt-1" th:text="${dispute.sellerProposalType}">REFUND</div>
+                                <p th:if="${dispute.sellerProposalNote}" class="text-gray-600 text-sm mt-1 whitespace-pre-wrap" th:text="${dispute.sellerProposalNote}">Proposal note</p>
                             </div>
                         </div>
                         <p class="text-xs text-gray-500 mt-2">
@@ -221,32 +238,74 @@
                     </div>
                 </div>
 
-                <!-- Response Form (only if dispute is OPENED and seller hasn't responded) -->
-                <div th:if="${dispute.status == 'OPENED' and dispute.sellerResponse == null}" class="card bg-green-50 border-green-100">
+                <div th:if="${dispute.status == 'OPENED'}" class="card bg-green-50 border-green-100">
                     <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                         <i class="ph ph-chat-circle-text text-success"></i> Phản hồi khiếu nại
                     </h2>
                     <p class="text-sm text-gray-600 mb-4">
-                        Hãy cung cấp phản hồi của bạn về khiếu nại này. Bạn có thể đính kèm bằng chứng để hỗ trợ trường hợp của mình.
+                        Bạn có thể cập nhật phản hồi, upload ảnh evidence và đề xuất phương án dàn xếp khi dispute còn ở giai đoạn thương lượng.
                     </p>
                     <form th:action="@{/seller/disputes/{id}/response(id=${dispute.disputeId})}"
-                          method="POST">
+                          method="POST"
+                          enctype="multipart/form-data">
                         <input type="hidden" th:name="${_csrf != null ? _csrf.parameterName : ''}" th:value="${_csrf != null ? _csrf.token : ''}" />
                         <div class="mb-4">
                             <label class="text-sm font-bold text-gray-700 mb-1 block">Phản hồi của bạn *</label>
                             <textarea name="response" rows="4" required
                                 class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-success focus:border-transparent"
+                                th:text="${dispute.sellerResponse}"
                                 placeholder="Giải thích tình huống từ góc nhìn của bạn..."></textarea>
                         </div>
                         <div class="mb-4">
                             <label class="text-sm font-bold text-gray-700 mb-1 block">Bằng chứng bổ sung (tùy chọn)</label>
                             <textarea name="evidence" rows="2"
                                 class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-success focus:border-transparent"
-                                placeholder="Mô tả bằng chứng hoặc cung cấp link đính kèm..."></textarea>
+                                th:text="${dispute.sellerEvidenceText}"
+                                placeholder="Mô tả bằng chứng bổ sung..."></textarea>
+                        </div>
+                        <div class="mb-4">
+                            <label class="text-sm font-bold text-gray-700 mb-1 block">Ảnh evidence</label>
+                            <input type="file" name="evidenceImages" multiple accept="image/*"
+                                   class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
+                        </div>
+                        <div class="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-sm font-bold text-gray-700 mb-1 block">Phương án đề xuất</label>
+                                <select name="proposalType" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
+                                    <option value="">Chỉ phản hồi, chưa đề xuất</option>
+                                    <option value="REFUND" th:selected="${dispute.sellerProposalType == 'REFUND'}">Hoàn tiền</option>
+                                    <option value="REPLACEMENT" th:selected="${dispute.sellerProposalType == 'REPLACEMENT'}">Thay credential</option>
+                                    <option value="DENY" th:selected="${dispute.sellerProposalType == 'DENY'}">Bác khiếu nại</option>
+                                </select>
+                            </div>
+                            <div id="replacement-credential-group"
+                                 th:classappend="${dispute.sellerProposalType != 'REPLACEMENT'} ? ' hidden' : ''">
+                                <label class="text-sm font-bold text-gray-700 mb-1 block">Credential thay thế</label>
+                                <select id="proposalCredentialId"
+                                        name="proposalCredentialId"
+                                        th:disabled="${dispute.sellerProposalType != 'REPLACEMENT'}"
+                                        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400">
+                                    <option value="">Không chọn</option>
+                                    <option th:each="credential : ${replacementCredentials}"
+                                            th:value="${credential.credentialId}"
+                                            th:selected="${dispute.sellerProposalCredentialId == credential.credentialId}"
+                                            th:text="${credential.credentialId + ' - ' + credential.accountUsername}">
+                                        1 - demo@example.com
+                                    </option>
+                                </select>
+                                <p class="text-xs text-gray-500 mt-2">Chỉ cần chọn credential khi phương án là thay credential.</p>
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="text-sm font-bold text-gray-700 mb-1 block">Ghi chú cho phương án đề xuất</label>
+                            <textarea name="proposalNote" rows="2"
+                                      class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-success focus:border-transparent"
+                                      th:text="${dispute.sellerProposalNote}"
+                                      placeholder="Ví dụ: Tôi đề xuất hoàn tiền toàn bộ hoặc đã cấp credential khác để buyer kiểm tra"></textarea>
                         </div>
                         <div class="flex justify-end">
                             <button type="submit" class="btn-primary flex items-center gap-2 bg-success hover:bg-green-600">
-                                <i class="ph ph-paper-plane-tilt"></i> Gửi phản hồi
+                                <i class="ph ph-paper-plane-tilt"></i> Cập nhật phản hồi
                             </button>
                         </div>
                     </form>
@@ -339,11 +398,10 @@
                             </button>
                         </div>
                     </form>
-                </div>
-            </div>
+                    </div>
 
             <!-- Right Column - Info -->
-            <div class="space-y-6">
+            <aside class="space-y-6 xl:sticky xl:top-28 self-start">
                 <!-- Order Info -->
                 <div class="card">
                     <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -416,7 +474,7 @@
                     <div class="space-y-4">
                         <div th:each="event : ${dispute.timeline}" class="flex gap-3">
                             <div class="flex flex-col items-center">
-                                <div th:switch="${event.type}">
+                                <div th:switch="${event.eventType}">
                                     <div th:case="'DISPUTE_OPENED'" class="w-8 h-8 rounded-full bg-red-100 text-error flex items-center justify-center">
                                         <i class="ph-fill ph-warning-circle text-sm"></i>
                                     </div>
@@ -445,11 +503,11 @@
                         </div>
                     </div>
                 </div>
-            </div>
+            </aside>
+        </div>
+    </main>
         </div>
     </div>
-    </main>
-</div>
 
     <!-- Footer -->
     <footer class="bg-gray-900 text-white py-8 mt-12">
@@ -477,6 +535,28 @@
                 menu.classList.add('hidden');
             }
         });
+
+        const proposalTypeSelect = document.querySelector('select[name="proposalType"]');
+        const replacementGroup = document.getElementById('replacement-credential-group');
+        const replacementSelect = document.getElementById('proposalCredentialId');
+
+        function syncReplacementCredentialField() {
+            if (!proposalTypeSelect || !replacementGroup || !replacementSelect) {
+                return;
+            }
+
+            const shouldShow = proposalTypeSelect.value === 'REPLACEMENT';
+            replacementGroup.classList.toggle('hidden', !shouldShow);
+            replacementSelect.disabled = !shouldShow;
+            if (!shouldShow) {
+                replacementSelect.value = '';
+            }
+        }
+
+        if (proposalTypeSelect) {
+            proposalTypeSelect.addEventListener('change', syncReplacementCredentialField);
+            syncReplacementCredentialField();
+        }
     </script>
 </body>
 

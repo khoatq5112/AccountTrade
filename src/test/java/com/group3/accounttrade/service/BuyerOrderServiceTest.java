@@ -32,11 +32,13 @@ class BuyerOrderServiceTest {
 
         Order awaitingPayment = order(OrderStatus.AWAITING_PAYMENT, BigDecimal.valueOf(100_000), LocalDateTime.now().minusDays(3));
         Order paymentExpired = order(OrderStatus.PAYMENT_EXPIRED, BigDecimal.valueOf(50_000), LocalDateTime.now().minusDays(2));
+        Order paymentFailed = order(OrderStatus.PAYMENT_FAILED, BigDecimal.valueOf(75_000), LocalDateTime.now().minusDays(2));
         Order awaitingConfirmation = order(OrderStatus.AWAITING_BUYER_CONFIRMATION, BigDecimal.valueOf(200_000), LocalDateTime.now().minusDays(2));
         Order disputed = order(OrderStatus.DISPUTED, BigDecimal.valueOf(300_000), LocalDateTime.now().minusDays(1));
         Order completed = order(OrderStatus.COMPLETED, BigDecimal.valueOf(400_000), LocalDateTime.now());
 
-        when(orderRepository.findByBuyer(buyer)).thenReturn(List.of(paymentExpired, awaitingPayment, awaitingConfirmation, disputed, completed));
+        when(orderRepository.findByBuyer(buyer)).thenReturn(List.of(
+                paymentExpired, paymentFailed, awaitingPayment, awaitingConfirmation, disputed, completed));
 
         BuyerOrderService.BuyerDashboardSummary summary = buyerOrderService.getDashboardSummary(buyer);
 

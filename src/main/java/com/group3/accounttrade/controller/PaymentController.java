@@ -90,12 +90,25 @@ public class PaymentController {
         VnpayPaymentService.PaymentResult result = vnpayPaymentService.processReturnCallback(params, request);
 
         if (result.isTopUp()) {
+            if (result.isPending() && result.getPendingPostId() != null) {
+                String encodedPostId = idEncoder.encodePostId(result.getPendingPostId());
+                return new ModelAndView("redirect:/buyer/checkout?postId=" + encodedPostId + "&topupPending=true");
+            }
+            if (result.isPending()) {
+                return new ModelAndView("redirect:/buyer/wallet?topupPending=true");
+            }
             if (result.isSuccess() && result.getPendingPostId() != null) {
                 String encodedPostId = idEncoder.encodePostId(result.getPendingPostId());
+                if (result.isSandboxReturnConfirmed()) {
+                    return new ModelAndView("redirect:/buyer/checkout?postId=" + encodedPostId + "&topupSandboxReturnConfirmed=true");
+                }
                 return new ModelAndView("redirect:/buyer/checkout?postId=" + encodedPostId + "&topupSuccess=true");
             }
             ModelAndView mav = new ModelAndView("redirect:/buyer/wallet");
             if (result.isSuccess()) {
+                if (result.isSandboxReturnConfirmed()) {
+                    return new ModelAndView("redirect:/buyer/wallet?topupSandboxReturnConfirmed=true");
+                }
                 return new ModelAndView("redirect:/buyer/wallet?topupSuccess=true");
             }
             return new ModelAndView("redirect:/buyer/wallet?topupFailed=true");

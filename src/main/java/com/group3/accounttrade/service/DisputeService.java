@@ -1,14 +1,41 @@
 package com.group3.accounttrade.service;
 
-import com.group3.accounttrade.dto.DisputeDetailDTO;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.group3.accounttrade.dto.DisputeDTO;
+import com.group3.accounttrade.dto.DisputeDetailDTO;
 import com.group3.accounttrade.dto.DisputeEventDTO;
 import com.group3.accounttrade.dto.DisputeMessageDTO;
-import com.group3.accounttrade.entity.*;
-import com.group3.accounttrade.repository.*;
+import com.group3.accounttrade.entity.AdminReview;
+import com.group3.accounttrade.entity.AuditLog;
+import com.group3.accounttrade.entity.CredentialAssignment;
+import com.group3.accounttrade.entity.Dispute;
+import com.group3.accounttrade.entity.DisputeMessage;
+import com.group3.accounttrade.entity.DisputeStatus;
+import com.group3.accounttrade.entity.Notification;
+import com.group3.accounttrade.entity.NotificationPreference;
+import com.group3.accounttrade.entity.Order;
+import com.group3.accounttrade.entity.OrderItem;
+import com.group3.accounttrade.entity.OrderStatus;
+import com.group3.accounttrade.entity.PostCredential;
+import com.group3.accounttrade.entity.RefundRequest;
+import com.group3.accounttrade.entity.User;
+import com.group3.accounttrade.repository.AdminReviewRepository;
+import com.group3.accounttrade.repository.AuditLogRepository;
+import com.group3.accounttrade.repository.CredentialAssignmentRepository;
+import com.group3.accounttrade.repository.DisputeMessageRepository;
+import com.group3.accounttrade.repository.DisputeRepository;
+import com.group3.accounttrade.repository.DisputeStatusRepository;
+import com.group3.accounttrade.repository.OrderRepository;
+import com.group3.accounttrade.repository.OrderStatusRepository;
+import com.group3.accounttrade.repository.PostCredentialRepository;
+import com.group3.accounttrade.repository.RefundRequestRepository;
+import com.group3.accounttrade.repository.UserRepository;
 import com.group3.accounttrade.service.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -16,23 +43,23 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
-/**
- * Service for managing dispute operations in the transaction workflow.
- * 
- * Dispute Lifecycle:
- * 1. Buyer opens dispute (status: OPENED)
- * 2. Admin reviews (status: UNDER_REVIEW)
- * 3. Resolution - either refund buyer or release to seller (status: RESOLVED)
- * 4. Or buyer cancels dispute (status: CANCELLED)
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class DisputeService {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final String LEGACY_IMAGE_MARKER = "[Bằng chứng hình ảnh]:";
+    private static final DateTimeFormatter NUMBER_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     private final DisputeRepository disputeRepository;
     private final DisputeMessageRepository disputeMessageRepository;
@@ -45,202 +72,107 @@ public class DisputeService {
     private final NotificationService notificationService;
     private final AdminReviewRepository adminReviewRepository;
     private final RefundRequestRepository refundRequestRepository;
+    private final UserRepository userRepository;
+    private final CredentialAssignmentRepository credentialAssignmentRepository;
+    private final PostCredentialRepository postCredentialRepository;
 
-    // Dispute status constants
+    @Value("${dispute.sla-timeout-hours:48}")
+    private long disputeSlaTimeoutHours;
+
+    @Value("${escrow.verification-timeout-hours:24}")
+    private long verificationTimeoutHours;
+
     public static final String STATUS_OPENED = "OPENED";
     public static final String STATUS_UNDER_REVIEW = "UNDER_REVIEW";
     public static final String STATUS_RESOLVED = "RESOLVED";
     public static final String STATUS_CANCELLED = "CANCELLED";
 
-    // Dispute reason constants
     public static final String REASON_INVALID_CREDENTIAL = "INVALID_CREDENTIAL";
     public static final String REASON_CREDENTIAL_CHANGED = "CREDENTIAL_CHANGED";
     public static final String REASON_NOT_AS_DESCRIBED = "NOT_AS_DESCRIBED";
     public static final String REASON_NO_CREDENTIAL_RECEIVED = "NO_CREDENTIAL_RECEIVED";
     public static final String REASON_OTHER = "OTHER";
 
-    /**
-     * Opens a new dispute for an order.
-     *
-     * @param orderId The order ID
-     * @param buyerId The buyer ID
-     * @param reason The dispute reason
-     * @param description Detailed description
-     * @return The created dispute
-     */
     @Transactional
     public Dispute openDispute(Long orderId, Integer buyerId, String reason, String description) {
         return openDispute(orderId, buyerId, reason, description, List.of());
     }
 
-    /**
-     * Opens a new dispute for an order with image evidence.
-     *
-     * @param orderId The order ID
-     * @param buyerId The buyer ID
-     * @param reason The dispute reason
-     * @param description Detailed description
-     * @param imageUrls List of image evidence URLs
-     * @return The created dispute
-     */
     @Transactional
     public Dispute openDispute(Long orderId, Integer buyerId, String reason, String description, List<String> imageUrls) {
-        log.info("[DISPUTE] Starting openDispute - orderId: {}, buyerId: {}, reason: {}", orderId, buyerId, reason);
-        
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> {
-                    log.error("[DISPUTE] Order not found: {}", orderId);
-                    return new IllegalArgumentException("Order not found: " + orderId);
-                });
-        log.info("[DISPUTE] Found order: {}, buyer: {}", order.getOrderNumber(), order.getBuyer().getUsername());
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
 
-        // Verify buyer owns this order
         if (!order.getBuyer().getUserId().equals(buyerId)) {
-            log.error("[DISPUTE] Buyer mismatch - order buyer: {}, request buyer: {}", order.getBuyer().getUserId(), buyerId);
             throw new IllegalStateException("Only the buyer can open a dispute for this order");
         }
 
-        // Check if order can be disputed
         String orderStatus = order.getOrderStatus().getStatusName();
-        log.info("[DISPUTE] Order status: {}", orderStatus);
-        if (!OrderStatus.CREDENTIAL_ASSIGNED.equals(orderStatus) &&
-            !OrderStatus.AWAITING_BUYER_CONFIRMATION.equals(orderStatus)) {
-            log.error("[DISPUTE] Order cannot be disputed in status: {}", orderStatus);
+        if (!OrderStatus.CREDENTIAL_ASSIGNED.equals(orderStatus)
+                && !OrderStatus.AWAITING_BUYER_CONFIRMATION.equals(orderStatus)) {
             throw new IllegalStateException("Order cannot be disputed in status: " + orderStatus);
         }
 
-        // Check if dispute already exists
-        List<Dispute> existingDisputes = disputeRepository.findByOrder(order);
-        if (!existingDisputes.isEmpty()) {
-            log.error("[DISPUTE] Dispute already exists for order: {}, existing count: {}", orderId, existingDisputes.size());
+        if (!disputeRepository.findByOrder(order).isEmpty()) {
             throw new IllegalStateException("A dispute already exists for this order");
         }
 
-        // Get opened status
-        log.info("[DISPUTE] Looking up OPENED status...");
-        DisputeStatus openedStatus = disputeStatusRepository.findByStatusName(STATUS_OPENED)
-                .orElseThrow(() -> {
-                    log.error("[DISPUTE] OPENED status not found in database!");
-                    return new IllegalStateException("OPENED status not found");
-                });
-        log.info("[DISPUTE] Found OPENED status with ID: {}", openedStatus.getStatusId());
-
-        // Combine description with image URLs for evidence
-        String evidence = description != null ? description : "";
-        if (imageUrls != null && !imageUrls.isEmpty()) {
-            String imageEvidence = "\n\n[Bằng chứng hình ảnh]:\n" + String.join("\n", imageUrls);
-            evidence = evidence + imageEvidence;
-            log.info("[DISPUTE] Added {} image URLs to evidence", imageUrls.size());
-        }
-
-        // Get seller from order
-        log.info("[DISPUTE] Getting seller from order...");
-        User seller = getSellerFromOrder(order);
-        log.info("[DISPUTE] Seller: {}", seller.getUsername());
-
-        // Generate unique dispute number
-        String disputeNumber = generateDisputeNumber();
-        log.info("[DISPUTE] Generated dispute number: {}", disputeNumber);
-
-        // Create dispute
-        log.info("[DISPUTE] Creating dispute entity...");
         Dispute dispute = Dispute.builder()
-                .disputeNumber(disputeNumber)
+                .disputeNumber(generateDisputeNumber())
                 .order(order)
                 .openedBy(order.getBuyer())
-                .respondent(seller)
-                .disputeStatus(openedStatus)
+                .respondent(getSellerFromOrder(order))
+                .disputeStatus(getDisputeStatus(STATUS_OPENED))
                 .disputeType(reason)
                 .reason(reason)
-                .buyerEvidence(evidence)
+                .buyerEvidence(encodeEvidence(description, imageUrls))
+                .sellerResponseDeadline(LocalDateTime.now().plusHours(disputeSlaTimeoutHours))
                 .build();
-        
-        log.info("[DISPUTE] Saving dispute to database...");
         disputeRepository.save(dispute);
-        log.info("[DISPUTE] Dispute saved with ID: {}", dispute.getDisputeId());
 
-        // Update order status to disputed
-        log.info("[DISPUTE] Looking up DISPUTED status...");
-        OrderStatus disputedStatus = orderStatusRepository.findByStatusName(OrderStatus.DISPUTED)
-                .orElseThrow(() -> {
-                    log.error("[DISPUTE] DISPUTED status not found in database!");
-                    return new IllegalStateException("DISPUTED status not found");
-                });
-        order.setOrderStatus(disputedStatus);
+        order.setOrderStatus(getOrderStatus(OrderStatus.DISPUTED));
         orderRepository.save(order);
-        log.info("[DISPUTE] Order status updated to DISPUTED");
 
-        // Freeze escrow (if exists - may not exist for older orders)
-        log.info("[DISPUTE] Freezing escrow for order: {}", orderId);
         try {
             escrowService.freezeEscrow(orderId, "Dispute opened: " + reason);
-            log.info("[DISPUTE] Escrow frozen successfully");
         } catch (IllegalArgumentException e) {
-            // Escrow doesn't exist for this order - log warning but continue
-            log.warn("[DISPUTE] No escrow found for order {}, continuing without freezing escrow: {}", orderId, e.getMessage());
-        } catch (Exception e) {
-            log.error("[DISPUTE] Failed to freeze escrow: {}", e.getMessage(), e);
-            throw e;
+            log.warn("[DISPUTE] No escrow found for order {}, continue opening dispute: {}", orderId, e.getMessage());
         }
 
-        // Mark credentials as disputed (if any exist)
-        log.info("[DISPUTE] Marking credentials as disputed...");
         try {
             credentialService.markCredentialsAsDisputed(order, reason);
-            log.info("[DISPUTE] Credentials marked as disputed");
         } catch (Exception e) {
-            log.warn("[DISPUTE] Could not mark credentials as disputed (may not exist): {}", e.getMessage());
-            // Don't throw - this is not critical for dispute creation
+            log.warn("[DISPUTE] Could not mark credentials as disputed for order {}: {}", orderId, e.getMessage());
         }
 
-        // Create audit log
-        log.info("[DISPUTE] Creating audit log...");
         createAuditLog(order.getBuyer(), "DISPUTE_OPENED", "Dispute", dispute.getDisputeId(),
                 String.format("Dispute opened for order %s. Reason: %s", order.getOrderNumber(), reason),
                 AuditLog.ROLE_BUYER);
 
-        // Notify seller
-        log.info("[DISPUTE] Sending notifications...");
-        notifySeller(order, "Dispute Opened",
-                String.format("A dispute has been opened for order %s. Reason: %s", order.getOrderNumber(), reason));
-        notifyBuyer(order, "Dispute Opened",
-                String.format("Your dispute for order %s has been created successfully. TrustBridge will review it if buyer and seller cannot resolve it directly.",
-                        order.getOrderNumber()));
-
-        // Notify admin
-        notifyAdmins("New Dispute Requires Review",
-                String.format("Dispute #%d for order %s requires review.", dispute.getDisputeId(), order.getOrderNumber()));
-
-        log.info("[DISPUTE] Dispute opened successfully - orderId: {}, disputeId: {}, reason: {}", orderId, dispute.getDisputeId(), reason);
+        notifySeller(dispute, "Dispute Opened",
+                String.format("Buyer opened dispute %s for order %s.", dispute.getDisputeNumber(), order.getOrderNumber()));
+        notifyBuyer(dispute, "Dispute Opened",
+                String.format("Your dispute %s has been created. Seller has %d hours to respond before TrustBridge can intervene.",
+                        dispute.getDisputeNumber(), disputeSlaTimeoutHours));
+        notifyAdmins("Dispute Monitoring",
+                String.format("Dispute %s was opened for order %s. Admin review becomes available after escalation or seller timeout.",
+                        dispute.getDisputeNumber(), order.getOrderNumber()));
 
         return dispute;
     }
 
-    /**
-     * Adds a message to a dispute.
-     *
-     * @param disputeId The dispute ID
-     * @param userId The user ID sending the message
-     * @param message The message content
-     * @param attachmentUrl Optional attachment URL
-     * @return The created message
-     */
     @Transactional
     public DisputeMessage addMessage(Long disputeId, Integer userId, String message, String attachmentUrl) {
-        Dispute dispute = disputeRepository.findById(disputeId)
-                .orElseThrow(() -> new IllegalArgumentException("Dispute not found: " + disputeId));
-
-        // Verify user is involved in dispute
+        Dispute dispute = getDisputeOrThrow(disputeId);
         boolean isBuyer = dispute.getOpenedBy().getUserId().equals(userId);
         boolean isSeller = dispute.getRespondent().getUserId().equals(userId);
         if (!isBuyer && !isSeller) {
             throw new IllegalStateException("Only buyer or seller can add messages to this dispute");
         }
 
-        User sender = getUserById(userId);
         DisputeMessage disputeMessage = DisputeMessage.builder()
                 .dispute(dispute)
-                .sender(sender)
+                .sender(getUserById(userId))
                 .senderRole(isBuyer ? DisputeMessage.ROLE_BUYER : DisputeMessage.ROLE_SELLER)
                 .content(message)
                 .attachmentPath(attachmentUrl)
@@ -248,121 +180,55 @@ public class DisputeService {
                 .build();
         disputeMessageRepository.save(disputeMessage);
 
-        // Update dispute timestamp
         dispute.setUpdatedAt(LocalDateTime.now());
         disputeRepository.save(dispute);
-
-        log.info("Message added to dispute {} by user {}", disputeId, userId);
 
         return disputeMessage;
     }
 
-    /**
-     * Escalates dispute for admin review.
-     *
-     * @param disputeId The dispute ID
-     * @param userId The user escalating
-     * @param reason The escalation reason
-     */
     @Transactional
-    public void escalateDispute(Long disputeId, Integer userId, String reason) {
-        Dispute dispute = disputeRepository.findById(disputeId)
-                .orElseThrow(() -> new IllegalArgumentException("Dispute not found: " + disputeId));
+    public void escalateDispute(Long disputeId, Integer buyerId, String reason) {
+        Dispute dispute = getDisputeOrThrow(disputeId);
+        if (!dispute.getOpenedBy().getUserId().equals(buyerId)) {
+            throw new IllegalStateException("Only the buyer can escalate this dispute");
+        }
+        ensureOpened(dispute, "Only opened disputes can be escalated");
 
-        DisputeStatus underReviewStatus = disputeStatusRepository.findByStatusName(STATUS_UNDER_REVIEW)
-                .orElseThrow(() -> new IllegalStateException("UNDER_REVIEW status not found"));
-
-        dispute.setDisputeStatus(underReviewStatus);
-        dispute.setAdminReviewStartedAt(LocalDateTime.now());
+        String escalationReason = normalizeText(reason, "Buyer requested admin review");
+        dispute.setBuyerEscalatedAt(LocalDateTime.now());
+        dispute.setBuyerEscalationReason(escalationReason);
         disputeRepository.save(dispute);
 
-        // Create admin review record
-        AdminReview adminReview = AdminReview.builder()
-                .reviewType("DISPUTE")
-                .entityType("Dispute")
-                .entityId(disputeId)
-                .issueDescription(reason)
-                .status("PENDING")
-                .build();
-        adminReviewRepository.save(adminReview);
+        createAdminReviewRecord(disputeId, escalationReason);
+        createAuditLog(dispute.getOpenedBy(), "DISPUTE_ESCALATED", "Dispute", disputeId,
+                String.format("Buyer escalated dispute %s. Reason: %s", dispute.getDisputeNumber(), escalationReason),
+                AuditLog.ROLE_BUYER);
 
-        // Create audit log
-        createAuditLog(null, "DISPUTE_ESCALATED", "Dispute", disputeId,
-                String.format("Dispute %d escalated. Reason: %s", disputeId, reason),
-                AuditLog.ROLE_SYSTEM);
-
-        // Notify admins
+        notifySeller(dispute, "Dispute Escalated",
+                String.format("Buyer escalated dispute %s to admin review.", dispute.getDisputeNumber()));
         notifyAdmins("Dispute Escalated",
-                String.format("Dispute #%d has been escalated and requires immediate review.", disputeId));
-
-        log.info("Dispute {} escalated for admin review", disputeId);
+                String.format("Dispute %s is ready for admin review.", dispute.getDisputeNumber()));
     }
 
-    /**
-     * Resolves dispute in buyer's favor (refund).
-     *
-     * @param disputeId The dispute ID
-     * @param adminId The admin ID
-     * @param resolution The resolution details
-     * @param refundAmount The refund amount (null for full refund)
-     */
     @Transactional
-    public void resolveInBuyerFavor(Long disputeId, Integer adminId, String resolution, java.math.BigDecimal refundAmount) {
-        log.info("[DEBUG] resolveInBuyerFavor - Starting for disputeId: {}, adminId: {}, refundAmount: {}",
-                disputeId, adminId, refundAmount);
-        
-        Dispute dispute = disputeRepository.findById(disputeId)
-                .orElseThrow(() -> {
-                    log.error("[DEBUG] Dispute not found: {}", disputeId);
-                    return new IllegalArgumentException("Dispute not found: " + disputeId);
-                });
-        log.info("[DEBUG] Found dispute: {}", dispute.getDisputeId());
+    public void resolveInBuyerFavor(Long disputeId, Integer adminId, String resolution, BigDecimal refundAmount) {
+        Dispute dispute = getDisputeOrThrow(disputeId);
+        ensureUnderReview(dispute);
 
-        User admin = getUserById(adminId);
-        log.info("[DEBUG] Admin lookup result: {}", admin != null ? admin.getUsername() : "null");
+        User admin = requireUser(adminId, "Admin not found: " + adminId);
+        Order order = requireOrder(dispute);
 
-        Order order = dispute.getOrder();
-        log.info("[DEBUG] Order from dispute: {}", order != null ? order.getOrderId() : "null");
-        
-        if (order == null) {
-            log.error("[DEBUG] Order is null for dispute: {}", disputeId);
-            throw new IllegalStateException("Dispute has no associated order");
-        }
-        
-        log.info("[DEBUG] Order ID: {}, OrderNumber: {}", order.getOrderId(), order.getOrderNumber());
-
-        // Update dispute status
-        log.info("[DEBUG] Looking up RESOLVED status...");
-        DisputeStatus resolvedStatus = disputeStatusRepository.findByStatusName(STATUS_RESOLVED)
-                .orElseThrow(() -> {
-                    log.error("[DEBUG] RESOLVED status not found in database!");
-                    return new IllegalStateException("RESOLVED status not found");
-                });
-        dispute.setDisputeStatus(resolvedStatus);
+        dispute.setDisputeStatus(getDisputeStatus(STATUS_RESOLVED));
         dispute.setResolvedAt(LocalDateTime.now());
         dispute.setResolutionNotes(resolution);
         dispute.setResolutionType("BUYER_FAVOR");
         dispute.setResolvedByAdmin(admin);
         disputeRepository.save(dispute);
-        log.info("[DEBUG] Dispute status updated to RESOLVED");
 
-        // Process refund
-        log.info("[DEBUG] Processing escrow refund for orderId: {}", order.getOrderId());
-        try {
-            escrowService.refundEscrow(order.getOrderId(), refundAmount, resolution, adminId);
-            log.info("[DEBUG] Escrow refund processed successfully");
-        } catch (Exception e) {
-            log.error("[DEBUG] Escrow refund failed: {} - {}", e.getClass().getName(), e.getMessage(), e);
-            throw e;
-        }
+        escrowService.refundEscrow(order.getOrderId(), refundAmount, resolution, adminId);
 
-        // Create refund request record
-        log.info("[DEBUG] Creating refund request record...");
-        String refundNumber = generateRefundNumber();
-        log.info("[DEBUG] Generated refund number: {}", refundNumber);
-        
         RefundRequest refundRequest = RefundRequest.builder()
-                .refundNumber(refundNumber)
+                .refundNumber(generateRefundNumber())
                 .order(order)
                 .dispute(dispute)
                 .requestedBy(order.getBuyer())
@@ -377,342 +243,438 @@ public class DisputeService {
                 .approvedByAdmin(admin)
                 .build();
         refundRequestRepository.save(refundRequest);
-        log.info("[DEBUG] Refund request record created with number: {}", refundNumber);
 
-        // Update order status
-        log.info("[DEBUG] Updating order status to REFUNDED...");
-        OrderStatus refundedStatus = orderStatusRepository.findByStatusName(OrderStatus.REFUNDED)
-                .orElseThrow(() -> {
-                    log.error("[DEBUG] REFUNDED status not found in database!");
-                    return new IllegalStateException("REFUNDED status not found");
-                });
-        order.setOrderStatus(refundedStatus);
+        order.setOrderStatus(getOrderStatus(OrderStatus.REFUNDED));
         order.setCancelledAt(LocalDateTime.now());
         order.setCancellationReason("Dispute resolved in buyer favor: " + resolution);
         orderRepository.save(order);
-        log.info("[DEBUG] Order status updated to REFUNDED");
 
-        // Revoke credentials
-        log.info("[DEBUG] Revoking credentials...");
         credentialService.revokeCredentials(order, "Dispute resolved in buyer favor");
-        log.info("[DEBUG] Credentials revoked");
 
-        // Create audit log
         createAuditLog(admin, "DISPUTE_RESOLVED_BUYER", "Dispute", disputeId,
-                String.format("Dispute %d resolved in buyer favor. Refund: %s", disputeId,
-                        refundAmount != null ? refundAmount : order.getTotalAmount()),
+                String.format("Dispute %s resolved in buyer favor. Refund: %s",
+                        dispute.getDisputeNumber(), refundAmount != null ? refundAmount : order.getTotalAmount()),
                 AuditLog.ROLE_ADMIN);
 
-        // Notify parties
-        notifyBuyer(order, "Dispute Resolved",
-                String.format("Your dispute for order %s has been resolved in your favor. Refund processed.",
-                        order.getOrderNumber()));
-        notifySeller(order, "Dispute Resolved",
-                String.format("The dispute for order %s has been resolved in buyer's favor.", order.getOrderNumber()));
-
-        log.info("[DEBUG] Dispute {} resolved in buyer favor successfully, refund: {}", disputeId, refundAmount);
+        notifyBuyer(dispute, "Dispute Resolved",
+                String.format("Dispute %s was resolved in your favor. Refund has been processed.", dispute.getDisputeNumber()));
+        notifySeller(dispute, "Dispute Resolved",
+                String.format("Dispute %s was resolved in buyer's favor.", dispute.getDisputeNumber()));
     }
 
-    /**
-     * Resolves dispute in seller's favor (release escrow).
-     *
-     * @param disputeId The dispute ID
-     * @param adminId The admin ID
-     * @param resolution The resolution details
-     */
     @Transactional
     public void resolveInSellerFavor(Long disputeId, Integer adminId, String resolution) {
-        Dispute dispute = disputeRepository.findById(disputeId)
-                .orElseThrow(() -> new IllegalArgumentException("Dispute not found: " + disputeId));
+        Dispute dispute = getDisputeOrThrow(disputeId);
+        ensureUnderReview(dispute);
 
-        User admin = getUserById(adminId);
-        Order order = dispute.getOrder();
+        User admin = requireUser(adminId, "Admin not found: " + adminId);
+        Order order = requireOrder(dispute);
 
-        // Update dispute status
-        DisputeStatus resolvedStatus = disputeStatusRepository.findByStatusName(STATUS_RESOLVED)
-                .orElseThrow(() -> new IllegalStateException("RESOLVED status not found"));
-        dispute.setDisputeStatus(resolvedStatus);
+        dispute.setDisputeStatus(getDisputeStatus(STATUS_RESOLVED));
         dispute.setResolvedAt(LocalDateTime.now());
         dispute.setResolutionNotes(resolution);
         dispute.setResolutionType("SELLER_FAVOR");
         dispute.setResolvedByAdmin(admin);
         disputeRepository.save(dispute);
 
-        // Unfreeze and release escrow
         escrowService.unfreezeEscrow(order.getOrderId(), "Dispute resolved in seller favor");
         escrowService.releaseEscrow(order.getOrderId(), "Dispute resolved in seller favor: " + resolution, adminId);
 
-        // Create audit log
         createAuditLog(admin, "DISPUTE_RESOLVED_SELLER", "Dispute", disputeId,
-                String.format("Dispute %d resolved in seller favor.", disputeId),
+                String.format("Dispute %s resolved in seller favor.", dispute.getDisputeNumber()),
                 AuditLog.ROLE_ADMIN);
 
-        // Notify parties
-        notifyBuyer(order, "Dispute Resolved",
-                String.format("Your dispute for order %s has been resolved in seller's favor.", order.getOrderNumber()));
-        notifySeller(order, "Dispute Resolved",
-                String.format("The dispute for order %s has been resolved in your favor. Payment released.", 
-                        order.getOrderNumber()));
-
-        log.info("Dispute {} resolved in seller favor", disputeId);
+        notifyBuyer(dispute, "Dispute Resolved",
+                String.format("Dispute %s was resolved in seller's favor.", dispute.getDisputeNumber()));
+        notifySeller(dispute, "Dispute Resolved",
+                String.format("Dispute %s was resolved in your favor.", dispute.getDisputeNumber()));
     }
 
-    /**
-     * Cancels a dispute (buyer only).
-     *
-     * @param disputeId The dispute ID
-     * @param buyerId The buyer ID
-     * @param reason The cancellation reason
-     */
     @Transactional
     public void cancelDispute(Long disputeId, Integer buyerId, String reason) {
-        Dispute dispute = disputeRepository.findById(disputeId)
-                .orElseThrow(() -> new IllegalArgumentException("Dispute not found: " + disputeId));
-
-        // Verify buyer owns this dispute
+        Dispute dispute = getDisputeOrThrow(disputeId);
         if (!dispute.getOpenedBy().getUserId().equals(buyerId)) {
             throw new IllegalStateException("Only the buyer can cancel this dispute");
         }
+        ensureOpened(dispute, "Only opened disputes can be cancelled");
 
-        // Update dispute status
-        DisputeStatus cancelledStatus = disputeStatusRepository.findByStatusName(STATUS_CANCELLED)
-                .orElseThrow(() -> new IllegalStateException("CANCELLED status not found"));
-        dispute.setDisputeStatus(cancelledStatus);
+        Order order = requireOrder(dispute);
+        dispute.setDisputeStatus(getDisputeStatus(STATUS_CANCELLED));
         dispute.setResolutionNotes(reason);
         dispute.setResolvedAt(LocalDateTime.now());
         dispute.setResolutionType("CANCELLED");
         disputeRepository.save(dispute);
 
-        Order order = dispute.getOrder();
-
-        // Unfreeze escrow
         escrowService.unfreezeEscrow(order.getOrderId(), "Dispute cancelled by buyer");
-
-        // Restore order status
-        OrderStatus awaitingStatus = orderStatusRepository.findByStatusName(OrderStatus.AWAITING_BUYER_CONFIRMATION)
-                .orElseThrow(() -> new IllegalStateException("AWAITING_BUYER_CONFIRMATION status not found"));
-        order.setOrderStatus(awaitingStatus);
+        order.setOrderStatus(getOrderStatus(OrderStatus.AWAITING_BUYER_CONFIRMATION));
+        order.setConfirmationDeadline(LocalDateTime.now().plusHours(verificationTimeoutHours));
         orderRepository.save(order);
 
-        // Create audit log
         createAuditLog(dispute.getOpenedBy(), "DISPUTE_CANCELLED", "Dispute", disputeId,
-                String.format("Dispute %d cancelled by buyer. Reason: %s", disputeId, reason),
+                String.format("Dispute %s cancelled by buyer. Reason: %s", dispute.getDisputeNumber(), reason),
                 AuditLog.ROLE_BUYER);
 
-        // Notify seller
-        notifySeller(order, "Dispute Cancelled",
-                String.format("The dispute for order %s has been cancelled by the buyer.", order.getOrderNumber()));
-
-        log.info("Dispute {} cancelled by buyer", disputeId);
+        notifySeller(dispute, "Dispute Cancelled",
+                String.format("Buyer cancelled dispute %s.", dispute.getDisputeNumber()));
     }
 
-    /**
-     * Gets all disputes for a buyer.
-     *
-     * @param buyerId The buyer ID
-     * @return List of disputes
-     */
     public List<Dispute> getDisputesByBuyer(Integer buyerId) {
         User buyer = getUserById(buyerId);
         return buyer == null ? List.of() : disputeRepository.findByOpenedByOrderByOpenedAtDesc(buyer);
     }
 
-    /**
-     * Gets all disputes for a seller.
-     *
-     * @param sellerId The seller ID
-     * @return List of disputes
-     */
     public List<Dispute> getDisputesBySeller(Integer sellerId) {
         User seller = getUserById(sellerId);
         return seller == null ? List.of() : disputeRepository.findByRespondentOrderByOpenedAtDesc(seller);
     }
 
-    /**
-     * Gets all open disputes (for admin).
-     *
-     * @return List of open disputes
-     */
     public List<Dispute> getOpenDisputes() {
-        DisputeStatus openedStatus = disputeStatusRepository.findByStatusName(STATUS_OPENED)
-                .orElse(null);
-        DisputeStatus underReviewStatus = disputeStatusRepository.findByStatusName(STATUS_UNDER_REVIEW)
-                .orElse(null);
-        
-        List<Dispute> disputes = new java.util.ArrayList<>();
-        if (openedStatus != null) {
-            disputes.addAll(disputeRepository.findByDisputeStatus(openedStatus));
-        }
-        if (underReviewStatus != null) {
-            disputes.addAll(disputeRepository.findByDisputeStatus(underReviewStatus));
-        }
+        List<Dispute> disputes = new ArrayList<>();
+        disputeStatusRepository.findByStatusName(STATUS_OPENED)
+                .ifPresent(status -> disputes.addAll(disputeRepository.findByDisputeStatus(status)));
+        disputeStatusRepository.findByStatusName(STATUS_UNDER_REVIEW)
+                .ifPresent(status -> disputes.addAll(disputeRepository.findByDisputeStatus(status)));
         return disputes;
     }
 
-    /**
-     * Gets messages for a dispute.
-     *
-     * @param disputeId The dispute ID
-     * @return List of messages
-     */
     public List<DisputeMessage> getDisputeMessages(Long disputeId) {
         return disputeRepository.findById(disputeId)
                 .map(disputeMessageRepository::findByDisputeOrderByCreatedAtAsc)
                 .orElse(List.of());
     }
 
-    /**
-     * Gets a dispute by ID.
-     *
-     * @param disputeId The dispute ID
-     * @return The dispute if found
-     */
     public Optional<Dispute> getDisputeById(Long disputeId) {
         return disputeRepository.findById(disputeId);
     }
 
-    /**
-     * Gets dispute for an order.
-     *
-     * @param orderId The order ID
-     * @return The dispute if exists
-     */
     public Optional<Dispute> getDisputeByOrderId(Long orderId) {
         return orderRepository.findById(orderId)
                 .flatMap(order -> disputeRepository.findByOrder(order).stream().findFirst());
     }
 
-    /**
-     * Extracts seller from order (assumes single seller per order).
-     */
-    private User getSellerFromOrder(Order order) {
-        return order.getOrderItems().stream()
-                .findFirst()
-                .map(item -> item.getPost().getSeller())
-                .orElseThrow(() -> new IllegalStateException("Order has no items"));
-    }
-
-    /**
-     * Gets user by ID.
-     */
-    private User getUserById(Integer userId) {
-        return userRepository != null ? userRepository.findById(userId).orElse(null) : null;
-    }
-
-    private final UserRepository userRepository;
-
-    /**
-     * Creates an audit log entry.
-     */
-    private void createAuditLog(User user, String action, String entityType,
-            Long entityId, String description, String performerRole) {
-        
-        AuditLog auditLog = AuditLog.builder()
-                .eventType(AuditLog.EVENT_DISPUTE)
-                .action(action)
-                .entityType(entityType)
-                .entityId(entityId)
-                .performedBy(user)
-                .performerRole(performerRole)
-                .description(description)
-                .success(true)
-                .build();
-
-        auditLogRepository.save(auditLog);
-    }
-
-    /**
-     * Notifies the buyer.
-     */
-    private void notifyBuyer(Order order, String title, String message) {
-        notificationService.createNotification(
-                order.getBuyer(),
-                Notification.TYPE_DISPUTE,
-                NotificationPreference.CATEGORY_DISPUTE,
-                title,
-                message,
-                Notification.PRIORITY_HIGH,
-                "ORDER",
-                order.getOrderId(),
-                "/buyer/disputes/" + order.getOrderId()
-        );
-    }
-
-    /**
-     * Notifies the seller.
-     */
-    private void notifySeller(Order order, String title, String message) {
-        User seller = getSellerFromOrder(order);
-        notificationService.createNotification(
-                seller,
-                Notification.TYPE_DISPUTE,
-                NotificationPreference.CATEGORY_DISPUTE,
-                title,
-                message,
-                Notification.PRIORITY_HIGH,
-                "ORDER",
-                order.getOrderId(),
-                "/seller/disputes/" + order.getOrderId()
-        );
-    }
-
-    /**
-     * Notifies admins.
-     */
-    private void notifyAdmins(String title, String message) {
-        notificationService.broadcastNotification(
-                title,
-                message,
-                Notification.TYPE_SYSTEM,
-                Notification.PRIORITY_HIGH,
-                List.of("Admin")
-        );
-    }
-
-    // ==================== NEW METHODS FOR DISPUTE FUNCTIONALITY ====================
-
-    /**
-     * Gets paginated disputes for a buyer with optional status filter.
-     *
-     * @param buyerId The buyer ID
-     * @param status Optional status filter (null for all)
-     * @param pageable Pagination parameters
-     * @return Page of disputes
-     */
     public Page<Dispute> getDisputesByBuyerPaginated(Integer buyerId, String status, Pageable pageable) {
         User buyer = getUserById(buyerId);
-        if (buyer == null) {
-            return Page.empty(pageable);
-        }
-        return disputeRepository.findByBuyerWithStatus(buyer, status, pageable);
+        return buyer == null ? Page.empty(pageable) : disputeRepository.findByBuyerWithStatus(buyer, status, pageable);
     }
 
-    /**
-     * Gets paginated disputes for a seller with optional status filter.
-     *
-     * @param sellerId The seller ID
-     * @param status Optional status filter (null for all)
-     * @param pageable Pagination parameters
-     * @return Page of disputes
-     */
     public Page<Dispute> getDisputesBySellerPaginated(Integer sellerId, String status, Pageable pageable) {
         User seller = getUserById(sellerId);
-        if (seller == null) {
-            return Page.empty(pageable);
-        }
-        return disputeRepository.findBySellerWithStatus(seller, status, pageable);
+        return seller == null ? Page.empty(pageable) : disputeRepository.findBySellerWithStatus(seller, status, pageable);
     }
 
-    /**
-     * Gets all disputes for admin with optional status filter.
-     *
-     * @param status Optional status filter (null for all)
-     * @param pageable Pagination parameters
-     * @return Page of DisputeDTO
-     */
     public Page<DisputeDTO> getAllDisputesPaginated(String status, Pageable pageable) {
-        Page<Dispute> disputesPage = disputeRepository.findAllWithStatus(status, pageable);
-        return disputesPage.map(this::mapToDisputeDTO);
+        return disputeRepository.findAllWithStatus(status, pageable).map(this::mapToDisputeDTO);
+    }
+
+    public DisputeDetailDTO getDisputeDetailDTO(Long disputeId) {
+        return disputeRepository.findById(disputeId).map(this::mapToDetailDTO).orElse(null);
+    }
+
+    @Transactional
+    public void submitSellerResponse(Long disputeId,
+                                     Integer sellerId,
+                                     String response,
+                                     String evidenceText,
+                                     List<String> evidenceImages,
+                                     String proposalType,
+                                     String proposalNote,
+                                     Integer proposalCredentialId) {
+        Dispute dispute = getDisputeOrThrow(disputeId);
+        if (!dispute.getRespondent().getUserId().equals(sellerId)) {
+            throw new IllegalStateException("Only the seller can respond to this dispute");
+        }
+        ensureOpened(dispute, "Dispute is no longer open for seller negotiation");
+
+        String normalizedResponse = normalizeRequiredText(response, "Seller response is required");
+        String normalizedProposalType = normalizeSellerProposalType(proposalType);
+        String normalizedProposalNote = normalizeText(proposalNote, null);
+
+        dispute.setSellerResponse(normalizedResponse);
+        dispute.setSellerEvidence(encodeEvidence(evidenceText, evidenceImages));
+        dispute.setSellerRespondedAt(LocalDateTime.now());
+        dispute.setSellerProposalType(normalizedProposalType);
+        dispute.setSellerProposalNote(normalizedProposalNote);
+        dispute.setSellerProposedAt(normalizedProposalType != null ? LocalDateTime.now() : null);
+
+        if (Dispute.PROPOSAL_REPLACEMENT.equals(normalizedProposalType)) {
+            if (dispute.getSellerProposalCredentialId() != null
+                    && !Objects.equals(dispute.getSellerProposalCredentialId(), proposalCredentialId)) {
+                throw new IllegalStateException("Replacement credential has already been selected for this dispute");
+            }
+            if (dispute.getSellerProposalCredentialId() == null) {
+                PostCredential replacementCredential = reserveReplacementCredential(dispute, sellerId, proposalCredentialId, normalizedProposalNote);
+                dispute.setSellerProposalCredentialId(replacementCredential.getCredentialId());
+            }
+        } else {
+            if (dispute.getSellerProposalCredentialId() != null) {
+                throw new IllegalStateException("Replacement proposal has already been created and cannot be changed");
+            }
+            dispute.setSellerProposalCredentialId(null);
+        }
+
+        disputeRepository.save(dispute);
+
+        createAuditLog(dispute.getRespondent(), "SELLER_RESPONDED", "Dispute", disputeId,
+                String.format("Seller responded to dispute %s", dispute.getDisputeNumber()),
+                AuditLog.ROLE_SELLER);
+
+        notifyBuyer(dispute, "Seller Responded",
+                String.format("Seller updated the response for dispute %s.", dispute.getDisputeNumber()));
+    }
+
+    public List<PostCredential> getReplacementCandidates(Long disputeId, Integer sellerId) {
+        Dispute dispute = getDisputeOrThrow(disputeId);
+        if (!dispute.getRespondent().getUserId().equals(sellerId)) {
+            throw new IllegalStateException("Only the seller can view replacement candidates");
+        }
+        if (!isReplacementEligible(dispute)) {
+            return List.of();
+        }
+
+        Integer postId = getSingleOrderItem(dispute).getPost().getPostId();
+        return postCredentialRepository.findAllForManagementByPostId(postId).stream()
+                .filter(pc -> pc.getCredentialStatus() != null
+                        && CredentialService.STATUS_AVAILABLE.equalsIgnoreCase(pc.getCredentialStatus().getStatusName()))
+                .toList();
+    }
+
+    @Transactional
+    public void acceptSellerRefund(Long disputeId, Integer buyerId) {
+        Dispute dispute = getDisputeOrThrow(disputeId);
+        if (!dispute.getOpenedBy().getUserId().equals(buyerId)) {
+            throw new IllegalStateException("Only the buyer can accept this refund proposal");
+        }
+        ensureOpened(dispute, "Dispute must still be open to accept seller refund");
+        if (!Dispute.PROPOSAL_REFUND.equals(dispute.getSellerProposalType())) {
+            throw new IllegalStateException("Seller has not proposed a refund for this dispute");
+        }
+
+        Order order = requireOrder(dispute);
+        String resolution = normalizeText(dispute.getSellerProposalNote(),
+                "Buyer accepted seller refund proposal");
+
+        dispute.setDisputeStatus(getDisputeStatus(STATUS_RESOLVED));
+        dispute.setResolvedAt(LocalDateTime.now());
+        dispute.setResolutionType("BUYER_FAVOR");
+        dispute.setResolutionNotes(resolution);
+        disputeRepository.save(dispute);
+
+        escrowService.refundEscrow(order.getOrderId(), null, resolution, null);
+        credentialService.revokeCredentials(order, "Buyer accepted seller refund proposal");
+
+        createAuditLog(dispute.getOpenedBy(), "BUYER_ACCEPTED_REFUND", "Dispute", disputeId,
+                String.format("Buyer accepted seller refund proposal for dispute %s", dispute.getDisputeNumber()),
+                AuditLog.ROLE_BUYER);
+
+        notifySeller(dispute, "Refund Proposal Accepted",
+                String.format("Buyer accepted your refund proposal for dispute %s.", dispute.getDisputeNumber()));
+        notifyBuyer(dispute, "Refund Processed",
+                String.format("Dispute %s was settled by seller refund.", dispute.getDisputeNumber()));
+    }
+
+    @Transactional
+    public void acceptSellerReplacement(Long disputeId, Integer buyerId) {
+        Dispute dispute = getDisputeOrThrow(disputeId);
+        if (!dispute.getOpenedBy().getUserId().equals(buyerId)) {
+            throw new IllegalStateException("Only the buyer can accept this replacement proposal");
+        }
+        ensureOpened(dispute, "Dispute must still be open to accept seller replacement");
+        if (!Dispute.PROPOSAL_REPLACEMENT.equals(dispute.getSellerProposalType())
+                || dispute.getSellerProposalCredentialId() == null) {
+            throw new IllegalStateException("Seller has not provided a valid replacement proposal");
+        }
+
+        Order order = requireOrder(dispute);
+        dispute.setDisputeStatus(getDisputeStatus(STATUS_CANCELLED));
+        dispute.setResolvedAt(LocalDateTime.now());
+        dispute.setResolutionType("CANCELLED");
+        dispute.setResolutionNotes("Buyer accepted seller replacement proposal");
+        disputeRepository.save(dispute);
+
+        escrowService.unfreezeEscrow(order.getOrderId(), "Buyer accepted seller replacement proposal");
+        order.setOrderStatus(getOrderStatus(OrderStatus.AWAITING_BUYER_CONFIRMATION));
+        order.setConfirmationDeadline(LocalDateTime.now().plusHours(verificationTimeoutHours));
+        orderRepository.save(order);
+
+        createAuditLog(dispute.getOpenedBy(), "BUYER_ACCEPTED_REPLACEMENT", "Dispute", disputeId,
+                String.format("Buyer accepted seller replacement proposal for dispute %s", dispute.getDisputeNumber()),
+                AuditLog.ROLE_BUYER);
+
+        notifySeller(dispute, "Replacement Accepted",
+                String.format("Buyer accepted your replacement proposal for dispute %s.", dispute.getDisputeNumber()));
+        notifyBuyer(dispute, "Replacement Accepted",
+                String.format("Dispute %s was settled by replacement. Please verify the new credential.", dispute.getDisputeNumber()));
+    }
+
+    @Transactional
+    public void assignAdmin(Long disputeId, Integer adminId) {
+        Dispute dispute = getDisputeOrThrow(disputeId);
+        User admin = requireUser(adminId, "Admin not found: " + adminId);
+        dispute.setAssignedAdmin(admin);
+        disputeRepository.save(dispute);
+
+        createAuditLog(admin, "ADMIN_ASSIGNED", "Dispute", disputeId,
+                String.format("Admin %s assigned to dispute %s", admin.getUsername(), dispute.getDisputeNumber()),
+                AuditLog.ROLE_ADMIN);
+    }
+
+    @Transactional
+    public void startReview(Long disputeId, Integer adminId) {
+        Dispute dispute = getDisputeOrThrow(disputeId);
+        ensureOpened(dispute, "Dispute must be OPENED to start review");
+
+        String reviewBlockReason = getReviewBlockReason(dispute);
+        if (reviewBlockReason != null) {
+            throw new IllegalStateException(reviewBlockReason);
+        }
+
+        User admin = getUserById(adminId);
+        dispute.setDisputeStatus(getDisputeStatus(STATUS_UNDER_REVIEW));
+        dispute.setAdminReviewStartedAt(LocalDateTime.now());
+        if (admin != null) {
+            dispute.setAssignedAdmin(admin);
+        }
+        disputeRepository.save(dispute);
+
+        createAdminReviewRecord(disputeId,
+                dispute.getBuyerEscalationReason() != null ? dispute.getBuyerEscalationReason() : "Seller response deadline exceeded");
+        createAuditLog(admin, "REVIEW_STARTED", "Dispute", disputeId,
+                String.format("Admin review started for dispute %s", dispute.getDisputeNumber()),
+                AuditLog.ROLE_ADMIN);
+
+        notifyBuyer(dispute, "Dispute Under Review",
+                String.format("Dispute %s is now under admin review.", dispute.getDisputeNumber()));
+        notifySeller(dispute, "Dispute Under Review",
+                String.format("Dispute %s is now under admin review.", dispute.getDisputeNumber()));
+    }
+
+    @Transactional
+    public void addAdminNote(Long disputeId, Integer adminId, String notes) {
+        Dispute dispute = getDisputeOrThrow(disputeId);
+        User admin = getUserById(adminId);
+
+        String existingNotes = dispute.getAdminNotes();
+        String newNotes = existingNotes != null && !existingNotes.isBlank()
+                ? existingNotes + "\n[" + LocalDateTime.now() + "] " + notes
+                : "[" + LocalDateTime.now() + "] " + notes;
+        dispute.setAdminNotes(newNotes);
+        disputeRepository.save(dispute);
+
+        createAuditLog(admin, "ADMIN_NOTE_ADDED", "Dispute", disputeId,
+                String.format("Admin note added to dispute %s", dispute.getDisputeNumber()),
+                AuditLog.ROLE_ADMIN);
+    }
+
+    public List<DisputeEventDTO> getDisputeTimeline(Long disputeId) {
+        List<DisputeEventDTO> timeline = new ArrayList<>();
+        Dispute dispute = disputeRepository.findById(disputeId).orElse(null);
+        if (dispute == null) {
+            return timeline;
+        }
+
+        long eventId = 1L;
+        timeline.add(new DisputeEventDTO(
+                eventId++,
+                DisputeEventDTO.TYPE_DISPUTE_OPENED,
+                String.format("Buyer opened dispute. Reason code: %s", dispute.getReason()),
+                AuditLog.ROLE_BUYER,
+                dispute.getOpenedBy().getUsername(),
+                dispute.getOpenedAt()
+        ));
+
+        if (dispute.getSellerRespondedAt() != null) {
+            timeline.add(new DisputeEventDTO(
+                    eventId++,
+                    DisputeEventDTO.TYPE_SELLER_RESPONDED,
+                    truncate("Seller response: " + dispute.getSellerResponse(), 120),
+                    AuditLog.ROLE_SELLER,
+                    dispute.getRespondent().getUsername(),
+                    dispute.getSellerRespondedAt()
+            ));
+        }
+
+        if (dispute.getSellerProposedAt() != null && dispute.getSellerProposalType() != null) {
+            timeline.add(new DisputeEventDTO(
+                    eventId++,
+                    DisputeEventDTO.TYPE_SELLER_RESPONDED,
+                    String.format("Seller proposed %s", dispute.getSellerProposalType()),
+                    AuditLog.ROLE_SELLER,
+                    dispute.getRespondent().getUsername(),
+                    dispute.getSellerProposedAt()
+            ));
+        }
+
+        if (dispute.getBuyerEscalatedAt() != null) {
+            timeline.add(new DisputeEventDTO(
+                    eventId++,
+                    DisputeEventDTO.TYPE_BUYER_MESSAGE,
+                    "Buyer escalated dispute to admin",
+                    AuditLog.ROLE_BUYER,
+                    dispute.getOpenedBy().getUsername(),
+                    dispute.getBuyerEscalatedAt()
+            ));
+        }
+
+        if (dispute.getAssignedAdmin() != null) {
+            timeline.add(new DisputeEventDTO(
+                    eventId++,
+                    DisputeEventDTO.TYPE_ADMIN_ASSIGNED,
+                    String.format("Admin %s assigned", dispute.getAssignedAdmin().getUsername()),
+                    AuditLog.ROLE_ADMIN,
+                    dispute.getAssignedAdmin().getUsername(),
+                    dispute.getAdminReviewStartedAt() != null ? dispute.getAdminReviewStartedAt() : dispute.getOpenedAt()
+            ));
+        }
+
+        if (dispute.getAdminReviewStartedAt() != null) {
+            timeline.add(new DisputeEventDTO(
+                    eventId++,
+                    DisputeEventDTO.TYPE_REVIEW_STARTED,
+                    "Admin review started",
+                    AuditLog.ROLE_ADMIN,
+                    dispute.getAssignedAdmin() != null ? dispute.getAssignedAdmin().getUsername() : "System",
+                    dispute.getAdminReviewStartedAt()
+            ));
+        }
+
+        if (dispute.getResolvedAt() != null) {
+            timeline.add(new DisputeEventDTO(
+                    eventId++,
+                    DisputeEventDTO.TYPE_DISPUTE_RESOLVED,
+                    truncate(String.format("Resolved: %s - %s", dispute.getResolutionType(), dispute.getResolutionNotes()), 120),
+                    dispute.getResolvedByAdmin() != null ? AuditLog.ROLE_ADMIN : AuditLog.ROLE_BUYER,
+                    dispute.getResolvedByAdmin() != null ? dispute.getResolvedByAdmin().getUsername() : dispute.getOpenedBy().getUsername(),
+                    dispute.getResolvedAt()
+            ));
+        }
+
+        List<DisputeMessage> messages = disputeMessageRepository.findByDisputeOrderByCreatedAtAsc(dispute);
+        for (DisputeMessage msg : messages) {
+            String eventType = DisputeMessage.ROLE_BUYER.equals(msg.getSenderRole())
+                    ? DisputeEventDTO.TYPE_BUYER_MESSAGE
+                    : DisputeMessage.ROLE_SELLER.equals(msg.getSenderRole())
+                            ? DisputeEventDTO.TYPE_SELLER_MESSAGE
+                            : DisputeEventDTO.TYPE_ADMIN_NOTE;
+            timeline.add(new DisputeEventDTO(
+                    eventId++,
+                    eventType,
+                    truncate(msg.getContent(), 100),
+                    msg.getSenderRole(),
+                    msg.getSender().getUsername(),
+                    msg.getCreatedAt()
+            ));
+        }
+
+        timeline.sort(Comparator.comparing(DisputeEventDTO::timestamp));
+        return timeline;
+    }
+
+    public DisputeStats getDisputeStats() {
+        long total = disputeRepository.count();
+        long opened = disputeRepository.countByStatusNameIn(List.of(STATUS_OPENED));
+        long underReview = disputeRepository.countByStatusNameIn(List.of(STATUS_UNDER_REVIEW));
+        long resolved = disputeRepository.countByStatusNameIn(List.of(STATUS_RESOLVED));
+        return new DisputeStats(total, opened, underReview, resolved);
     }
 
     private DisputeDTO mapToDisputeDTO(Dispute dispute) {
@@ -731,304 +693,12 @@ public class DisputeService {
         );
     }
 
-    /**
-     * Gets detailed dispute information as DTO.
-     *
-     * @param disputeId The dispute ID
-     * @return DisputeDetailDTO or null if not found
-     */
-    public DisputeDetailDTO getDisputeDetailDTO(Long disputeId) {
-        return disputeRepository.findById(disputeId)
-                .map(this::mapToDetailDTO)
-                .orElse(null);
-    }
-
-    /**
-     * Submits seller response to a dispute.
-     *
-     * @param disputeId The dispute ID
-     * @param sellerId The seller ID
-     * @param response The response text
-     * @param evidence Optional evidence
-     */
-    @Transactional
-    public void submitSellerResponse(Long disputeId, Integer sellerId, String response, String evidence) {
-        Dispute dispute = disputeRepository.findById(disputeId)
-                .orElseThrow(() -> new IllegalArgumentException("Dispute not found: " + disputeId));
-
-        // Verify seller is the respondent
-        if (!dispute.getRespondent().getUserId().equals(sellerId)) {
-            throw new IllegalStateException("Only the seller can respond to this dispute");
-        }
-
-        // Check dispute is in correct status
-        if (!STATUS_OPENED.equals(dispute.getDisputeStatus().getStatusName())) {
-            throw new IllegalStateException("Dispute is not in OPENED status");
-        }
-
-        // Update dispute with seller response
-        dispute.setSellerResponse(response);
-        dispute.setSellerEvidence(evidence);
-        dispute.setSellerRespondedAt(LocalDateTime.now());
-        disputeRepository.save(dispute);
-
-        // Create audit log
-        createAuditLog(dispute.getRespondent(), "SELLER_RESPONDED", "Dispute", disputeId,
-                String.format("Seller responded to dispute %d", disputeId),
-                AuditLog.ROLE_SELLER);
-
-        // Notify buyer
-        notifyBuyer(dispute.getOrder(), "Seller Responded",
-                String.format("The seller has responded to your dispute for order %s.", 
-                        dispute.getOrder().getOrderNumber()));
-
-        log.info("Seller {} responded to dispute {}", sellerId, disputeId);
-    }
-
-    /**
-     * Assigns an admin to a dispute.
-     *
-     * @param disputeId The dispute ID
-     * @param adminId The admin ID
-     */
-    @Transactional
-    public void assignAdmin(Long disputeId, Integer adminId) {
-        Dispute dispute = disputeRepository.findById(disputeId)
-                .orElseThrow(() -> new IllegalArgumentException("Dispute not found: " + disputeId));
-
-        User admin = getUserById(adminId);
-        if (admin == null) {
-            throw new IllegalArgumentException("Admin not found: " + adminId);
-        }
-
-        dispute.setAssignedAdmin(admin);
-        disputeRepository.save(dispute);
-
-        // Create audit log
-        createAuditLog(admin, "ADMIN_ASSIGNED", "Dispute", disputeId,
-                String.format("Admin %s assigned to dispute %d", admin.getUsername(), disputeId),
-                AuditLog.ROLE_ADMIN);
-
-        log.info("Admin {} assigned to dispute {}", adminId, disputeId);
-    }
-
-    /**
-     * Starts admin review of a dispute (changes status to UNDER_REVIEW).
-     *
-     * @param disputeId The dispute ID
-     * @param adminId The admin ID starting the review
-     */
-    @Transactional
-    public void startReview(Long disputeId, Integer adminId) {
-        Dispute dispute = disputeRepository.findById(disputeId)
-                .orElseThrow(() -> new IllegalArgumentException("Dispute not found: " + disputeId));
-
-        // Verify status is OPENED
-        if (!STATUS_OPENED.equals(dispute.getDisputeStatus().getStatusName())) {
-            throw new IllegalStateException("Dispute must be in OPENED status to start review");
-        }
-
-        User admin = getUserById(adminId);
-
-        // Update status to UNDER_REVIEW
-        DisputeStatus underReviewStatus = disputeStatusRepository.findByStatusName(STATUS_UNDER_REVIEW)
-                .orElseThrow(() -> new IllegalStateException("UNDER_REVIEW status not found"));
-
-        dispute.setDisputeStatus(underReviewStatus);
-        dispute.setAdminReviewStartedAt(LocalDateTime.now());
-        if (admin != null) {
-            dispute.setAssignedAdmin(admin);
-        }
-        disputeRepository.save(dispute);
-
-        // Create audit log
-        createAuditLog(admin, "REVIEW_STARTED", "Dispute", disputeId,
-                String.format("Admin review started for dispute %d", disputeId),
-                AuditLog.ROLE_ADMIN);
-
-        // Notify both parties
-        notifyBuyer(dispute.getOrder(), "Dispute Under Review",
-                String.format("Your dispute for order %s is now under admin review.", 
-                        dispute.getOrder().getOrderNumber()));
-        notifySeller(dispute.getOrder(), "Dispute Under Review",
-                String.format("The dispute for order %s is now under admin review.", 
-                        dispute.getOrder().getOrderNumber()));
-
-        log.info("Admin review started for dispute {} by admin {}", disputeId, adminId);
-    }
-
-    /**
-     * Adds internal admin notes to a dispute.
-     *
-     * @param disputeId The dispute ID
-     * @param adminId The admin ID
-     * @param notes The notes to add
-     */
-    @Transactional
-    public void addAdminNote(Long disputeId, Integer adminId, String notes) {
-        Dispute dispute = disputeRepository.findById(disputeId)
-                .orElseThrow(() -> new IllegalArgumentException("Dispute not found: " + disputeId));
-
-        User admin = getUserById(adminId);
-
-        String existingNotes = dispute.getAdminNotes();
-        String newNotes = existingNotes != null && !existingNotes.isBlank()
-                ? existingNotes + "\n[" + LocalDateTime.now() + "] " + notes
-                : "[" + LocalDateTime.now() + "] " + notes;
-        
-        dispute.setAdminNotes(newNotes);
-        disputeRepository.save(dispute);
-
-        // Create audit log
-        createAuditLog(admin, "ADMIN_NOTE_ADDED", "Dispute", disputeId,
-                String.format("Admin note added to dispute %d", disputeId),
-                AuditLog.ROLE_ADMIN);
-
-        log.info("Admin note added to dispute {} by admin {}", disputeId, adminId);
-    }
-
-    /**
-     * Gets dispute timeline events.
-     *
-     * @param disputeId The dispute ID
-     * @return List of timeline events
-     */
-    public List<DisputeEventDTO> getDisputeTimeline(Long disputeId) {
-        List<DisputeEventDTO> timeline = new ArrayList<>();
-        
-        Dispute dispute = disputeRepository.findById(disputeId).orElse(null);
-        if (dispute == null) {
-            return timeline;
-        }
-
-        long eventId = 1;
-
-        // Dispute opened
-        timeline.add(new DisputeEventDTO(
-                eventId++,
-                DisputeEventDTO.TYPE_DISPUTE_OPENED,
-                String.format("Dispute opened. Reason: %s", dispute.getReason()),
-                AuditLog.ROLE_BUYER,
-                dispute.getOpenedBy().getUsername(),
-                dispute.getOpenedAt()
-        ));
-
-        // Seller responded
-        if (dispute.getSellerRespondedAt() != null) {
-            timeline.add(new DisputeEventDTO(
-                    eventId++,
-                    DisputeEventDTO.TYPE_SELLER_RESPONDED,
-                    String.format("Seller responded: %s", 
-                            truncate(dispute.getSellerResponse(), 100)),
-                    AuditLog.ROLE_SELLER,
-                    dispute.getRespondent().getUsername(),
-                    dispute.getSellerRespondedAt()
-            ));
-        }
-
-        // Admin assigned
-        if (dispute.getAssignedAdmin() != null) {
-            timeline.add(new DisputeEventDTO(
-                    eventId++,
-                    DisputeEventDTO.TYPE_ADMIN_ASSIGNED,
-                    String.format("Admin %s assigned", dispute.getAssignedAdmin().getUsername()),
-                    AuditLog.ROLE_ADMIN,
-                    dispute.getAssignedAdmin().getUsername(),
-                    dispute.getAdminReviewStartedAt() != null ? dispute.getAdminReviewStartedAt() : dispute.getOpenedAt()
-            ));
-        }
-
-        // Review started
-        if (dispute.getAdminReviewStartedAt() != null) {
-            timeline.add(new DisputeEventDTO(
-                    eventId++,
-                    DisputeEventDTO.TYPE_REVIEW_STARTED,
-                    "Admin review started",
-                    AuditLog.ROLE_ADMIN,
-                    dispute.getAssignedAdmin() != null ? dispute.getAssignedAdmin().getUsername() : "System",
-                    dispute.getAdminReviewStartedAt()
-            ));
-        }
-
-        // Resolved
-        if (dispute.getResolvedAt() != null) {
-            timeline.add(new DisputeEventDTO(
-                    eventId++,
-                    DisputeEventDTO.TYPE_DISPUTE_RESOLVED,
-                    String.format("Dispute resolved: %s - %s", 
-                            dispute.getResolutionType(),
-                            truncate(dispute.getResolutionNotes(), 100)),
-                    AuditLog.ROLE_ADMIN,
-                    dispute.getResolvedByAdmin() != null ? dispute.getResolvedByAdmin().getUsername() : "System",
-                    dispute.getResolvedAt()
-            ));
-        }
-
-        // Add messages to timeline
-        List<DisputeMessage> messages = disputeMessageRepository.findByDisputeOrderByCreatedAtAsc(dispute);
-        for (DisputeMessage msg : messages) {
-            String eventType = DisputeMessage.ROLE_BUYER.equals(msg.getSenderRole()) 
-                    ? DisputeEventDTO.TYPE_BUYER_MESSAGE 
-                    : DisputeMessage.ROLE_SELLER.equals(msg.getSenderRole())
-                            ? DisputeEventDTO.TYPE_SELLER_MESSAGE
-                            : DisputeEventDTO.TYPE_ADMIN_NOTE;
-            
-            timeline.add(new DisputeEventDTO(
-                    eventId++,
-                    eventType,
-                    truncate(msg.getContent(), 100),
-                    msg.getSenderRole(),
-                    msg.getSender().getUsername(),
-                    msg.getCreatedAt()
-            ));
-        }
-
-        // Sort by timestamp
-        timeline.sort((a, b) -> a.timestamp().compareTo(b.timestamp()));
-
-        return timeline;
-    }
-
-    /**
-     * Maps Dispute entity to DisputeDetailDTO.
-     */
     private DisputeDetailDTO mapToDetailDTO(Dispute dispute) {
-        Order order = dispute.getOrder();
-        
-        DisputeDetailDTO.OrderInfo orderInfo = new DisputeDetailDTO.OrderInfo(
-                order.getOrderId(),
-                order.getOrderNumber(),
-                order.getTotalAmount(),
-                order.getOrderStatus().getStatusName(),
-                order.getCreatedAt()
-        );
-
-        DisputeDetailDTO.UserInfo buyerInfo = new DisputeDetailDTO.UserInfo(
-                dispute.getOpenedBy().getUserId(),
-                dispute.getOpenedBy().getUsername(),
-                dispute.getOpenedBy().getEmail()
-        );
-
-        DisputeDetailDTO.UserInfo sellerInfo = new DisputeDetailDTO.UserInfo(
-                dispute.getRespondent().getUserId(),
-                dispute.getRespondent().getUsername(),
-                dispute.getRespondent().getEmail()
-        );
-
-        DisputeDetailDTO.UserSummary assignedAdmin = dispute.getAssignedAdmin() != null
-                ? new DisputeDetailDTO.UserSummary(
-                        dispute.getAssignedAdmin().getUserId(),
-                        dispute.getAssignedAdmin().getUsername())
-                : null;
-
-        DisputeDetailDTO.UserSummary resolvedBy = dispute.getResolvedByAdmin() != null
-                ? new DisputeDetailDTO.UserSummary(
-                        dispute.getResolvedByAdmin().getUserId(),
-                        dispute.getResolvedByAdmin().getUsername())
-                : null;
-
-        // Map messages
+        Order order = requireOrder(dispute);
+        EvidencePayload buyerEvidence = decodeEvidence(dispute.getBuyerEvidence());
+        EvidencePayload sellerEvidence = decodeEvidence(dispute.getSellerEvidence());
         List<DisputeMessage> messages = disputeMessageRepository.findByDisputeOrderByCreatedAtAsc(dispute);
+
         List<DisputeMessageDTO> messageDTOs = messages.stream()
                 .map(msg -> new DisputeMessageDTO(
                         msg.getMessageId(),
@@ -1044,9 +714,6 @@ public class DisputeService {
                 ))
                 .toList();
 
-        // Get timeline
-        List<DisputeEventDTO> timeline = getDisputeTimeline(dispute.getDisputeId());
-
         return new DisputeDetailDTO(
                 dispute.getDisputeId(),
                 dispute.getDisputeNumber(),
@@ -1054,8 +721,16 @@ public class DisputeService {
                 dispute.getDisputeType(),
                 dispute.getReason(),
                 dispute.getBuyerEvidence(),
+                buyerEvidence.text(),
+                buyerEvidence.images(),
                 dispute.getSellerResponse(),
                 dispute.getSellerEvidence(),
+                sellerEvidence.text(),
+                sellerEvidence.images(),
+                dispute.getSellerProposalType(),
+                dispute.getSellerProposalNote(),
+                dispute.getSellerProposalCredentialId(),
+                dispute.getSellerProposedAt(),
                 dispute.getResolutionType(),
                 dispute.getResolutionNotes(),
                 dispute.getAdminNotes(),
@@ -1064,62 +739,370 @@ public class DisputeService {
                 dispute.getSellerResponseDeadline(),
                 dispute.getAdminReviewStartedAt(),
                 dispute.getResolvedAt(),
-                orderInfo,
-                buyerInfo,
-                sellerInfo,
-                assignedAdmin,
-                resolvedBy,
+                canAdminReview(dispute),
+                getReviewBlockReason(dispute),
+                new DisputeDetailDTO.OrderInfo(
+                        order.getOrderId(),
+                        order.getOrderNumber(),
+                        order.getTotalAmount(),
+                        order.getOrderStatus().getStatusName(),
+                        order.getCreatedAt()
+                ),
+                new DisputeDetailDTO.UserInfo(
+                        dispute.getOpenedBy().getUserId(),
+                        dispute.getOpenedBy().getUsername(),
+                        dispute.getOpenedBy().getEmail()
+                ),
+                new DisputeDetailDTO.UserInfo(
+                        dispute.getRespondent().getUserId(),
+                        dispute.getRespondent().getUsername(),
+                        dispute.getRespondent().getEmail()
+                ),
+                dispute.getAssignedAdmin() != null
+                        ? new DisputeDetailDTO.UserSummary(dispute.getAssignedAdmin().getUserId(), dispute.getAssignedAdmin().getUsername())
+                        : null,
+                dispute.getResolvedByAdmin() != null
+                        ? new DisputeDetailDTO.UserSummary(dispute.getResolvedByAdmin().getUserId(), dispute.getResolvedByAdmin().getUsername())
+                        : null,
                 messageDTOs,
-                timeline
+                getDisputeTimeline(dispute.getDisputeId())
         );
     }
 
-    /**
-     * Truncates a string to a maximum length.
-     */
+    private boolean canAdminReview(Dispute dispute) {
+        return getReviewBlockReason(dispute) == null;
+    }
+
+    private String getReviewBlockReason(Dispute dispute) {
+        if (!STATUS_OPENED.equals(getStatusName(dispute))) {
+            return "Dispute is no longer in negotiation phase";
+        }
+        if (dispute.getBuyerEscalatedAt() != null) {
+            return null;
+        }
+        if (dispute.getSellerResponseDeadline() != null && dispute.getSellerResponseDeadline().isBefore(LocalDateTime.now())) {
+            return null;
+        }
+        return "Admin review is blocked until buyer escalates or seller response deadline expires";
+    }
+
+    private PostCredential reserveReplacementCredential(Dispute dispute,
+                                                        Integer sellerId,
+                                                        Integer replacementCredentialId,
+                                                        String proposalNote) {
+        if (!isReplacementEligible(dispute)) {
+            throw new IllegalStateException("Replacement is only supported for single-item credential disputes");
+        }
+        if (replacementCredentialId == null) {
+            throw new IllegalArgumentException("Replacement credential is required");
+        }
+
+        OrderItem orderItem = getSingleOrderItem(dispute);
+        PostCredential replacementCredential = postCredentialRepository.findById(replacementCredentialId)
+                .orElseThrow(() -> new IllegalArgumentException("Replacement credential not found: " + replacementCredentialId));
+
+        if (!replacementCredential.getPost().getSeller().getUserId().equals(sellerId)
+                || !replacementCredential.getPost().getPostId().equals(orderItem.getPost().getPostId())) {
+            throw new IllegalStateException("Replacement credential must belong to the same seller and post");
+        }
+        if (replacementCredential.getCredentialStatus() == null
+                || !CredentialService.STATUS_AVAILABLE.equalsIgnoreCase(replacementCredential.getCredentialStatus().getStatusName())) {
+            throw new IllegalStateException("Replacement credential must be available");
+        }
+
+        CredentialAssignment activeAssignment = getActiveAssignment(orderItem);
+        credentialService.provideReplacementCredential(activeAssignment.getAssignmentId(), replacementCredential,
+                normalizeText(proposalNote, "Seller proposed replacement during dispute"));
+        return replacementCredential;
+    }
+
+    private boolean isReplacementEligible(Dispute dispute) {
+        if (!REASON_INVALID_CREDENTIAL.equals(dispute.getReason())
+                && !REASON_CREDENTIAL_CHANGED.equals(dispute.getReason())) {
+            return false;
+        }
+        Order order = dispute.getOrder();
+        return order != null && order.getOrderItems() != null && order.getOrderItems().size() == 1;
+    }
+
+    private OrderItem getSingleOrderItem(Dispute dispute) {
+        Order order = requireOrder(dispute);
+        if (order.getOrderItems() == null || order.getOrderItems().size() != 1) {
+            throw new IllegalStateException("Replacement is only supported for single-item orders");
+        }
+        return order.getOrderItems().get(0);
+    }
+
+    private CredentialAssignment getActiveAssignment(OrderItem orderItem) {
+        return credentialAssignmentRepository.findByOrderItemOrderByAssignedAtDesc(orderItem).stream()
+                .filter(assignment -> !CredentialService.ASSIGNMENT_REPLACED.equalsIgnoreCase(assignment.getAssignmentStatus()))
+                .filter(assignment -> !CredentialService.ASSIGNMENT_REVOKED.equalsIgnoreCase(assignment.getAssignmentStatus()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Active credential assignment not found for replacement"));
+    }
+
+    private Dispute getDisputeOrThrow(Long disputeId) {
+        return disputeRepository.findById(disputeId)
+                .orElseThrow(() -> new IllegalArgumentException("Dispute not found: " + disputeId));
+    }
+
+    private User getUserById(Integer userId) {
+        return userId == null ? null : userRepository.findById(userId).orElse(null);
+    }
+
+    private User requireUser(Integer userId, String message) {
+        User user = getUserById(userId);
+        if (user == null) {
+            throw new IllegalArgumentException(message);
+        }
+        return user;
+    }
+
+    private Order requireOrder(Dispute dispute) {
+        if (dispute.getOrder() == null) {
+            throw new IllegalStateException("Dispute has no associated order");
+        }
+        return dispute.getOrder();
+    }
+
+    private User getSellerFromOrder(Order order) {
+        return order.getOrderItems().stream()
+                .findFirst()
+                .map(item -> item.getPost().getSeller())
+                .orElseThrow(() -> new IllegalStateException("Order has no items"));
+    }
+
+    private DisputeStatus getDisputeStatus(String statusName) {
+        return disputeStatusRepository.findByStatusName(statusName)
+                .orElseThrow(() -> new IllegalStateException(statusName + " status not found"));
+    }
+
+    private OrderStatus getOrderStatus(String statusName) {
+        return orderStatusRepository.findByStatusName(statusName)
+                .orElseThrow(() -> new IllegalStateException(statusName + " status not found"));
+    }
+
+    private void ensureOpened(Dispute dispute, String message) {
+        if (!STATUS_OPENED.equals(getStatusName(dispute))) {
+            throw new IllegalStateException(message);
+        }
+    }
+
+    private void ensureUnderReview(Dispute dispute) {
+        if (!STATUS_UNDER_REVIEW.equals(getStatusName(dispute))) {
+            throw new IllegalStateException("Dispute must be under admin review before resolution");
+        }
+    }
+
+    private String getStatusName(Dispute dispute) {
+        return dispute.getDisputeStatus() != null ? dispute.getDisputeStatus().getStatusName() : null;
+    }
+
+    private void createAuditLog(User user, String action, String entityType,
+                                Long entityId, String description, String performerRole) {
+        AuditLog auditLog = AuditLog.builder()
+                .eventType(AuditLog.EVENT_DISPUTE)
+                .action(action)
+                .entityType(entityType)
+                .entityId(entityId)
+                .performedBy(user)
+                .performerRole(performerRole)
+                .description(description)
+                .success(true)
+                .build();
+        auditLogRepository.save(auditLog);
+    }
+
+    private void notifyBuyer(Dispute dispute, String title, String message) {
+        notificationService.createNotification(
+                dispute.getOpenedBy(),
+                Notification.TYPE_DISPUTE,
+                NotificationPreference.CATEGORY_DISPUTE,
+                title,
+                message,
+                Notification.PRIORITY_HIGH,
+                "DISPUTE",
+                dispute.getDisputeId(),
+                "/buyer/disputes/" + dispute.getDisputeId()
+        );
+    }
+
+    private void notifySeller(Dispute dispute, String title, String message) {
+        notificationService.createNotification(
+                dispute.getRespondent(),
+                Notification.TYPE_DISPUTE,
+                NotificationPreference.CATEGORY_DISPUTE,
+                title,
+                message,
+                Notification.PRIORITY_HIGH,
+                "DISPUTE",
+                dispute.getDisputeId(),
+                "/seller/disputes/" + dispute.getDisputeId()
+        );
+    }
+
+    private void notifyAdmins(String title, String message) {
+        notificationService.broadcastNotification(
+                title,
+                message,
+                Notification.TYPE_SYSTEM,
+                Notification.PRIORITY_HIGH,
+                List.of("Admin")
+        );
+    }
+
+    private void createAdminReviewRecord(Long disputeId, String reason) {
+        AdminReview adminReview = AdminReview.builder()
+                .reviewType("DISPUTE")
+                .entityType("Dispute")
+                .entityId(disputeId)
+                .issueDescription(reason)
+                .status("PENDING")
+                .build();
+        adminReviewRepository.save(adminReview);
+    }
+
+    private String encodeEvidence(String text, List<String> images) {
+        String normalizedText = normalizeText(text, "");
+        List<String> normalizedImages = images == null ? List.of() : images.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .distinct()
+                .toList();
+
+        if (normalizedText.isBlank() && normalizedImages.isEmpty()) {
+            return null;
+        }
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("text", normalizedText);
+        payload.put("images", normalizedImages);
+        try {
+            return OBJECT_MAPPER.writeValueAsString(payload);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to encode dispute evidence", e);
+        }
+    }
+
+    private EvidencePayload decodeEvidence(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return new EvidencePayload("", List.of());
+        }
+
+        String trimmed = raw.trim();
+        if (trimmed.startsWith("{")) {
+            try {
+                Map<String, Object> payload = OBJECT_MAPPER.readValue(trimmed, new TypeReference<>() {});
+                String text = payload.get("text") instanceof String value ? value : "";
+                List<String> images = payload.get("images") instanceof List<?> values
+                        ? values.stream().filter(String.class::isInstance).map(String.class::cast).toList()
+                        : List.of();
+                List<String> normalizedImages = !images.isEmpty() ? images : extractImageUrls(trimmed);
+                return new EvidencePayload(cleanEvidenceText(text), normalizedImages);
+            } catch (Exception e) {
+                log.warn("[DISPUTE] Failed to parse JSON evidence, falling back to legacy parser: {}", e.getMessage());
+            }
+        }
+
+        String[] sections = trimmed.split("\\Q" + LEGACY_IMAGE_MARKER + "\\E", 2);
+        String text = cleanEvidenceText(sections[0]);
+        List<String> images = new ArrayList<>();
+        if (sections.length > 1) {
+            images.addAll(extractImageUrls(sections[1]));
+        }
+        if (images.isEmpty()) {
+            images.addAll(extractImageUrls(trimmed));
+        }
+
+        if (images.isEmpty() && (trimmed.startsWith("http://") || trimmed.startsWith("https://"))) {
+            images.add(trimmed);
+            text = "";
+        }
+        return new EvidencePayload(cleanEvidenceText(text), images.stream().distinct().toList());
+    }
+
+    private List<String> extractImageUrls(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("https?://[^\\s\\]\\[\\\"']+")
+                .matcher(raw);
+
+        List<String> urls = new ArrayList<>();
+        while (matcher.find()) {
+            String url = matcher.group().trim();
+            while (!url.isEmpty() && ",.;)".indexOf(url.charAt(url.length() - 1)) >= 0) {
+                url = url.substring(0, url.length() - 1);
+            }
+            if (!url.isBlank()) {
+                urls.add(url);
+            }
+        }
+        return urls.stream().distinct().toList();
+    }
+
+    private String cleanEvidenceText(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+
+        String cleaned = text.replace(LEGACY_IMAGE_MARKER, " ")
+                .replaceAll("https?://[^\\s]+", " ")
+                .replaceAll("[\\r\\n]{3,}", "\n\n")
+                .trim();
+        return cleaned;
+    }
+
+    private String normalizeSellerProposalType(String proposalType) {
+        if (proposalType == null || proposalType.isBlank()) {
+            return null;
+        }
+        String normalized = proposalType.trim().toUpperCase();
+        if (!List.of(Dispute.PROPOSAL_REFUND, Dispute.PROPOSAL_REPLACEMENT, Dispute.PROPOSAL_DENY).contains(normalized)) {
+            throw new IllegalArgumentException("Invalid seller proposal type");
+        }
+        return normalized;
+    }
+
+    private String normalizeRequiredText(String value, String message) {
+        String normalized = normalizeText(value, null);
+        if (normalized == null || normalized.isBlank()) {
+            throw new IllegalArgumentException(message);
+        }
+        return normalized;
+    }
+
+    private String normalizeText(String value, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? defaultValue : normalized;
+    }
+
     private String truncate(String str, int maxLength) {
-        if (str == null) return "";
+        if (str == null) {
+            return "";
+        }
         return str.length() > maxLength ? str.substring(0, maxLength) + "..." : str;
     }
 
-    /**
-     * Generates a unique dispute number.
-     * Format: DSP-YYYYMMDD-XXXXX
-     */
     private String generateDisputeNumber() {
-        String datePart = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")
-                .format(java.time.LocalDate.now());
+        String datePart = NUMBER_DATE_FORMAT.format(java.time.LocalDate.now());
         long count = disputeRepository.count() + 1;
         return String.format("DSP-%s-%05d", datePart, count);
     }
 
-    /**
-     * Generates a unique refund number.
-     * Format: RFD-YYYYMMDD-XXXXX
-     */
     private String generateRefundNumber() {
-        String datePart = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")
-                .format(java.time.LocalDate.now());
+        String datePart = NUMBER_DATE_FORMAT.format(java.time.LocalDate.now());
         long count = refundRequestRepository.count() + 1;
         return String.format("RFD-%s-%05d", datePart, count);
     }
 
-    /**
-     * Gets dispute statistics for dashboard.
-     *
-     * @return DisputeStats object
-     */
-    public DisputeStats getDisputeStats() {
-        long total = disputeRepository.count();
-        long opened = disputeRepository.countByStatusNameIn(List.of(STATUS_OPENED));
-        long underReview = disputeRepository.countByStatusNameIn(List.of(STATUS_UNDER_REVIEW));
-        long resolved = disputeRepository.countByStatusNameIn(List.of(STATUS_RESOLVED));
-        
-        return new DisputeStats(total, opened, underReview, resolved);
-    }
-
-    /**
-     * Record for dispute statistics.
-     */
     public record DisputeStats(long total, long opened, long underReview, long resolved) {}
+
+    private record EvidencePayload(String text, List<String> images) {}
 }

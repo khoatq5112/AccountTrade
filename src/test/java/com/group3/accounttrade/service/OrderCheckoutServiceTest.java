@@ -17,6 +17,7 @@ import com.group3.accounttrade.repository.OrderStatusRepository;
 import com.group3.accounttrade.repository.PaymentRepository;
 import com.group3.accounttrade.repository.PaymentStatusRepository;
 import com.group3.accounttrade.repository.PostRepository;
+import com.group3.accounttrade.service.notification.NotificationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -79,6 +80,9 @@ class OrderCheckoutServiceTest {
 
     @Mock
     private PostService postService;
+
+    @Mock
+    private NotificationService notificationService;
 
     @InjectMocks
     private OrderCheckoutService orderCheckoutService;
@@ -243,5 +247,35 @@ class OrderCheckoutServiceTest {
         assertEquals("Sản phẩm đã hết tài khoản khả dụng.", exception.getMessage());
         verifyNoInteractions(walletService);
         verifyNoInteractions(vnpayPaymentService);
+    }
+
+    @Test
+    void initiateCheckoutRejectsDuplicateActiveOrderForSamePost() {
+        User buyer = User.builder().userId(1).username("buyer").build();
+        User seller = User.builder().userId(2).username("seller").build();
+        Post post = Post.builder()
+                .postId(9)
+                .title("Coursera Plus - 1 Year")
+                .price(BigDecimal.valueOf(199_000))
+                .seller(seller)
+                .stockStatus(StockStatus.IN_STOCK)
+                .build();
+        Order existingOrder = Order.builder()
+                .orderId(50L)
+                .orderStatus(OrderStatus.builder().statusName(OrderStatus.AWAITING_PAYMENT).build())
+                .build();
+
+        when(postRepository.findById(9)).thenReturn(Optional.of(post));
+        when(postService.getPurchaseAvailability(post))
+                .thenReturn(new PostService.PurchaseAvailability(true, null, 1));
+        when(orderRepository.findByBuyerAndPostIdAndStatusIn(eq(buyer), eq(9), any()))
+                .thenReturn(List.of(existingOrder));
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> orderCheckoutService.initiateCheckout(buyer, 9, null));
+
+        assertEquals("Bạn đã có một đơn hàng đang xử lý cho sản phẩm này.", exception.getMessage());
+        verifyNoInteractions(vnpayPaymentService);
+        verify(paymentRepository, never()).save(any());
     }
 }

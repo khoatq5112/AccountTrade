@@ -89,6 +89,7 @@
 
         <main class="flex-1 space-y-6">
             <div th:if="${successMessage}" class="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700" th:text="${successMessage}"></div>
+            <div th:if="${infoMessage}" class="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700" th:text="${infoMessage}"></div>
             <div th:if="${errorMessage}" class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" th:text="${errorMessage}"></div>
 
             <section class="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
@@ -108,26 +109,40 @@
                         </div>
                         <div class="rounded-2xl bg-slate-50 px-4 py-4">
                             <p class="text-xs uppercase tracking-wide text-gray-500">Mức nạp tối thiểu</p>
-                            <p class="mt-2 text-2xl font-bold text-gray-900" th:text="${#numbers.formatDecimal(minimumTopUpAmount, 0, 'COMMA', 0, 'POINT') + ' ₫'}">10,000 ₫</p>
+                            <p class="mt-2 text-2xl font-bold text-gray-900" th:text="${#numbers.formatDecimal(minimumTopUpAmount, 0, 'COMMA', 0, 'POINT') + ' ₫'}">20,000 ₫</p>
+                        </div>
+                        <div class="rounded-2xl bg-slate-50 px-4 py-4 sm:col-span-3">
+                            <p class="text-xs uppercase tracking-wide text-gray-500">Mức nạp mỗi lần</p>
+                            <p class="mt-2 text-lg font-bold text-gray-900"
+                               th:text="${#numbers.formatDecimal(minimumTopUpAmount, 0, 'COMMA', 0, 'POINT') + ' ₫ - ' + #numbers.formatDecimal(maximumTopUpAmount, 0, 'COMMA', 0, 'POINT') + ' ₫'}">20,000 ₫ - 5,000,000 ₫</p>
                         </div>
                     </div>
                 </div>
 
                 <div class="bg-white rounded-3xl shadow-soft border border-gray-100 p-6">
                     <h2 class="text-xl font-bold text-gray-900">Nạp tiền vào ví</h2>
-                    <p class="mt-2 text-sm text-gray-500">Bạn có thể nạp đúng phần thiếu để tiếp tục mua hàng hoặc nạp nhiều hơn cho những lần thanh toán tiếp theo.</p>
+                    <p class="mt-2 text-sm text-gray-500">Chọn nhanh mệnh giá phổ biến hoặc nhập tay. Hệ thống cho phép nạp từ <span th:text="${#numbers.formatDecimal(minimumTopUpAmount, 0, 'COMMA', 0, 'POINT')}">20,000</span> ₫ đến <span th:text="${#numbers.formatDecimal(maximumTopUpAmount, 0, 'COMMA', 0, 'POINT')}">5,000,000</span> ₫ mỗi lần.</p>
 
                     <form th:action="@{/buyer/wallet/topup}" method="post" class="mt-6 space-y-4">
                         <div>
                             <label for="amount" class="block text-sm font-semibold text-gray-700 mb-2">Số tiền nạp</label>
-                            <input id="amount" name="amount" type="number" min="10000" step="1000" th:value="${minimumTopUpAmount}"
+                            <input id="amount" name="amount" type="number"
+                                   th:attr="min=${minimumTopUpAmount},max=${maximumTopUpAmount}"
+                                   step="1000" th:value="${topUpPresetAmounts[0]}"
                                    class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary"
                                    required>
+                            <p class="mt-2 text-xs text-gray-500">Mỗi giao dịch nạp tối thiểu <span th:text="${#numbers.formatDecimal(minimumTopUpAmount, 0, 'COMMA', 0, 'POINT')}">20,000</span> ₫ và tối đa <span th:text="${#numbers.formatDecimal(maximumTopUpAmount, 0, 'COMMA', 0, 'POINT')}">5,000,000</span> ₫.</p>
                         </div>
-                        <div class="grid grid-cols-3 gap-3 text-sm">
-                            <button type="button" class="rounded-2xl border border-gray-200 px-3 py-2 font-semibold hover:bg-gray-50" onclick="setTopUpAmount(10000)">10k</button>
-                            <button type="button" class="rounded-2xl border border-gray-200 px-3 py-2 font-semibold hover:bg-gray-50" onclick="setTopUpAmount(50000)">50k</button>
-                            <button type="button" class="rounded-2xl border border-gray-200 px-3 py-2 font-semibold hover:bg-gray-50" onclick="setTopUpAmount(100000)">100k</button>
+                        <div>
+                            <p class="mb-2 text-sm font-semibold text-gray-700">Mệnh giá gợi ý</p>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                                <button th:each="preset : ${topUpPresetAmounts}"
+                                        type="button"
+                                        class="rounded-2xl border border-gray-200 px-3 py-2 font-semibold hover:bg-gray-50"
+                                        th:attr="data-amount=${preset}"
+                                        onclick="setTopUpAmount(this.dataset.amount)"
+                                        th:text="${#numbers.formatDecimal(preset, 0, 'COMMA', 0, 'POINT') + ' ₫'}">100,000 ₫</button>
+                            </div>
                         </div>
                         <button type="submit" class="w-full rounded-2xl bg-primary px-4 py-3 text-white font-bold hover:bg-primary-dark">
                             Tiếp tục đến VNPAY

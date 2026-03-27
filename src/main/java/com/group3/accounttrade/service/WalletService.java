@@ -20,7 +20,15 @@ import java.util.*;
 @Slf4j
 public class WalletService {
 
-    public static final BigDecimal MIN_TOP_UP_AMOUNT = BigDecimal.valueOf(10_000);
+    public static final BigDecimal MIN_TOP_UP_AMOUNT = BigDecimal.valueOf(20_000);
+    public static final BigDecimal MAX_TOP_UP_AMOUNT = BigDecimal.valueOf(5_000_000);
+    private static final List<BigDecimal> PRESET_TOP_UP_AMOUNTS = List.of(
+            BigDecimal.valueOf(100_000),
+            BigDecimal.valueOf(200_000),
+            BigDecimal.valueOf(500_000),
+            BigDecimal.valueOf(1_000_000),
+            BigDecimal.valueOf(2_000_000)
+    );
 
     private final WalletRepository walletRepository;
     private final WalletTransactionRepository walletTransactionRepository;
@@ -56,12 +64,15 @@ public class WalletService {
         if (requiredAmount == null || requiredAmount.compareTo(BigDecimal.ZERO) <= 0) {
             return BigDecimal.ZERO;
         }
-        return requiredAmount.max(MIN_TOP_UP_AMOUNT);
+        return requiredAmount.max(MIN_TOP_UP_AMOUNT).min(MAX_TOP_UP_AMOUNT);
     }
 
     public void validateTopUpAmount(BigDecimal amount) {
         if (amount == null || amount.compareTo(MIN_TOP_UP_AMOUNT) < 0) {
-            throw new IllegalArgumentException("Số tiền nạp tối thiểu là 10,000 ₫.");
+            throw new IllegalArgumentException("Số tiền nạp tối thiểu là 20,000 ₫.");
+        }
+        if (amount.compareTo(MAX_TOP_UP_AMOUNT) > 0) {
+            throw new IllegalArgumentException("Số tiền nạp tối đa cho mỗi lần là 5,000,000 ₫.");
         }
     }
 
@@ -72,7 +83,11 @@ public class WalletService {
             throw new InsufficientBalanceException(
                     "Số dư không đủ. Số dư hiện tại: " + wallet.getBalance() + " VND, cần: " + amount + " VND");
         }
-        wallet.setBalance(wallet.getBalance().subtract(amount));
+        BigDecimal updatedBalance = wallet.getBalance().subtract(amount);
+        if (updatedBalance.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalStateException("Wallet balance cannot become negative");
+        }
+        wallet.setBalance(updatedBalance);
         walletRepository.save(wallet);
 
         WalletTransaction tx = WalletTransaction.builder()
@@ -154,7 +169,7 @@ public class WalletService {
 
     @Transactional
     public WalletTopUp confirmTopUp(String vnpayTxnRef, String vnpayTransactionNo) {
-        WalletTopUp topUp = walletTopUpRepository.findByVnpayTxnRef(vnpayTxnRef)
+        WalletTopUp topUp = walletTopUpRepository.findLockedByVnpayTxnRef(vnpayTxnRef)
                 .orElseThrow(() -> new IllegalArgumentException("Top-up not found: " + vnpayTxnRef));
 
         if (WalletTopUp.STATUS_COMPLETED.equals(topUp.getStatus())) {
@@ -174,7 +189,7 @@ public class WalletService {
 
     @Transactional
     public void failTopUp(String vnpayTxnRef) {
-        walletTopUpRepository.findByVnpayTxnRef(vnpayTxnRef).ifPresent(topUp -> {
+        walletTopUpRepository.findLockedByVnpayTxnRef(vnpayTxnRef).ifPresent(topUp -> {
             if (WalletTopUp.STATUS_PENDING.equals(topUp.getStatus())) {
                 topUp.setStatus(WalletTopUp.STATUS_FAILED);
                 walletTopUpRepository.save(topUp);
@@ -198,8 +213,22 @@ public class WalletService {
                 .orElse(null);
     }
 
+    public String getTopUpStatus(String vnpayTxnRef) {
+        return walletTopUpRepository.findByVnpayTxnRef(vnpayTxnRef)
+                .map(WalletTopUp::getStatus)
+                .orElse(null);
+    }
+
     public BigDecimal getMinimumTopUpAmount() {
         return MIN_TOP_UP_AMOUNT;
+    }
+
+    public BigDecimal getMaximumTopUpAmount() {
+        return MAX_TOP_UP_AMOUNT;
+    }
+
+    public List<BigDecimal> getPresetTopUpAmounts() {
+        return PRESET_TOP_UP_AMOUNTS;
     }
 
     private Wallet getOrCreateWalletForUpdate(User user) {

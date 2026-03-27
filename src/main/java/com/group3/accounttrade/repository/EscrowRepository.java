@@ -4,10 +4,13 @@ import com.group3.accounttrade.entity.Escrow;
 import com.group3.accounttrade.entity.EscrowStatus;
 import com.group3.accounttrade.entity.Order;
 import com.group3.accounttrade.entity.User;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
@@ -22,6 +25,10 @@ import java.util.Optional;
 public interface EscrowRepository extends JpaRepository<Escrow, Long> {
 
     Optional<Escrow> findByOrder(Order order);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT e FROM Escrow e WHERE e.order = :order")
+    Optional<Escrow> findByOrderForUpdate(@Param("order") Order order);
 
     Optional<Escrow> findByOrderOrderNumber(String orderNumber);
 

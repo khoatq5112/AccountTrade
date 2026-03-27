@@ -140,8 +140,8 @@ const AdminDisputeDetail = (function() {
                 bgColor: 'bg-red-100',
                 textColor: 'text-red-700',
                 icon: 'ph-warning-circle',
-                text: 'Chờ xử lý',
-                description: 'Khiếu nại đang chờ admin xem xét'
+                text: 'Đang thương lượng',
+                description: 'Admin theo dõi, chỉ can thiệp khi buyer escalate hoặc seller quá hạn'
             },
             'UNDER_REVIEW': {
                 bgColor: 'bg-orange-100',
@@ -239,39 +239,6 @@ const AdminDisputeDetail = (function() {
     }
 
     /**
-     * Parse evidence string to extract text and image URLs
-     */
-    function parseEvidence(evidence) {
-        if (!evidence) return { text: '', images: [] };
-        
-        // Check if evidence contains image URLs (comma-separated or newline-separated)
-        const lines = evidence.split(/[\n,]+/);
-        const images = [];
-        const textParts = [];
-        
-        lines.forEach(function(line) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith('http') && (
-                trimmed.includes('cloudinary') || 
-                trimmed.includes('.jpg') || 
-                trimmed.includes('.png') || 
-                trimmed.includes('.gif') ||
-                trimmed.includes('.jpeg') ||
-                trimmed.includes('.webp')
-            )) {
-                images.push(trimmed);
-            } else if (trimmed.length > 0) {
-                textParts.push(trimmed);
-            }
-        });
-        
-        return {
-            text: textParts.join('\n'),
-            images: images
-        };
-    }
-
-    /**
      * Render evidence images in a grid
      */
     function renderEvidenceImages(container, images) {
@@ -328,14 +295,13 @@ const AdminDisputeDetail = (function() {
         const buyerEvidenceEl = document.getElementById('buyer-evidence');
         const buyerImagesEl = document.getElementById('buyer-evidence-images');
         
-        if (dispute.buyerEvidence) {
-            const parsed = parseEvidence(dispute.buyerEvidence);
-            if (parsed.text) {
-                buyerEvidenceEl.innerHTML = '<p class="whitespace-pre-wrap">' + parsed.text + '</p>';
+        if (dispute.buyerEvidenceText || (dispute.buyerEvidenceImages && dispute.buyerEvidenceImages.length > 0)) {
+            if (dispute.buyerEvidenceText) {
+                buyerEvidenceEl.innerHTML = '<p class="whitespace-pre-wrap">' + dispute.buyerEvidenceText + '</p>';
             } else {
                 buyerEvidenceEl.innerHTML = '<p class="text-gray-400 italic">Xem hình ảnh bằng chứng bên dưới</p>';
             }
-            renderEvidenceImages(buyerImagesEl, parsed.images);
+            renderEvidenceImages(buyerImagesEl, dispute.buyerEvidenceImages || []);
         } else {
             buyerEvidenceEl.innerHTML = '<p class="text-gray-400 italic">Chưa có bằng chứng</p>';
             if (buyerImagesEl) {
@@ -348,23 +314,16 @@ const AdminDisputeDetail = (function() {
         const sellerResponseEl = document.getElementById('seller-response');
         const sellerImagesEl = document.getElementById('seller-evidence-images');
         
-        if (dispute.sellerResponse) {
-            const parsed = parseEvidence(dispute.sellerResponse);
-            if (parsed.text) {
-                sellerResponseEl.innerHTML = '<p class="whitespace-pre-wrap">' + parsed.text + '</p>';
-            } else {
-                sellerResponseEl.innerHTML = '<p class="text-gray-400 italic">Xem hình ảnh bằng chứng bên dưới</p>';
+        if (dispute.sellerResponse || dispute.sellerEvidenceText || (dispute.sellerEvidenceImages && dispute.sellerEvidenceImages.length > 0)) {
+            const fragments = [];
+            if (dispute.sellerResponse) {
+                fragments.push('<p class="whitespace-pre-wrap">' + dispute.sellerResponse + '</p>');
             }
-            renderEvidenceImages(sellerImagesEl, parsed.images);
-        } else if (dispute.sellerEvidence) {
-            // Check for separate sellerEvidence field
-            const parsed = parseEvidence(dispute.sellerEvidence);
-            if (parsed.text) {
-                sellerResponseEl.innerHTML = '<p class="whitespace-pre-wrap">' + parsed.text + '</p>';
-            } else {
-                sellerResponseEl.innerHTML = '<p class="text-gray-400 italic">Xem hình ảnh bằng chứng bên dưới</p>';
+            if (dispute.sellerEvidenceText) {
+                fragments.push('<p class="whitespace-pre-wrap text-sm text-gray-600 mt-3">' + dispute.sellerEvidenceText + '</p>');
             }
-            renderEvidenceImages(sellerImagesEl, parsed.images);
+            sellerResponseEl.innerHTML = fragments.join('');
+            renderEvidenceImages(sellerImagesEl, dispute.sellerEvidenceImages || []);
         } else {
             sellerResponseEl.innerHTML = '<p class="text-gray-400 italic">Chưa có phản hồi</p>';
             if (sellerImagesEl) {
@@ -372,6 +331,27 @@ const AdminDisputeDetail = (function() {
                 sellerImagesEl.innerHTML = '';
             }
         }
+    }
+
+    function renderSellerProposal(dispute) {
+        const proposalEl = document.getElementById('seller-proposal');
+        if (!proposalEl) return;
+
+        if (!dispute.sellerProposalType) {
+            proposalEl.innerHTML = '<p class="text-gray-400 italic">Seller chưa đưa ra phương án cụ thể.</p>';
+            return;
+        }
+
+        let html = '<div class="rounded-lg border border-amber-200 bg-amber-50 p-4">';
+        html += '<div class="font-bold text-gray-900">' + dispute.sellerProposalType + '</div>';
+        if (dispute.sellerProposalNote) {
+            html += '<p class="mt-2 whitespace-pre-wrap">' + dispute.sellerProposalNote + '</p>';
+        }
+        if (dispute.sellerProposedAt) {
+            html += '<p class="mt-2 text-xs text-gray-500">Đề xuất lúc ' + formatDateTime(dispute.sellerProposedAt) + '</p>';
+        }
+        html += '</div>';
+        proposalEl.innerHTML = html;
     }
 
     function renderTimeline(dispute) {
@@ -453,11 +433,16 @@ const AdminDisputeDetail = (function() {
         const startReviewEl = document.getElementById('action-start-review');
         const resolutionActionsEl = document.getElementById('resolution-actions');
         const alreadyResolvedEl = document.getElementById('already-resolved');
+        const reviewBlockReasonEl = document.getElementById('review-block-reason');
 
         // Hide all first
         startReviewEl.classList.add('hidden');
         resolutionActionsEl.classList.add('hidden');
         alreadyResolvedEl.classList.add('hidden');
+        if (reviewBlockReasonEl) {
+            reviewBlockReasonEl.classList.add('hidden');
+            reviewBlockReasonEl.textContent = '';
+        }
 
         if (dispute.status === 'RESOLVED' || dispute.status === 'CANCELLED') {
             // Show resolved message
@@ -468,10 +453,12 @@ const AdminDisputeDetail = (function() {
                 document.getElementById('resolution-summary').textContent = 'Loại giải quyết: ' + dispute.resolutionType;
             }
         } else if (dispute.status === 'OPENED') {
-            // Show start review button
             startReviewEl.classList.remove('hidden');
+            if (!dispute.canAdminReview && dispute.reviewBlockReason && reviewBlockReasonEl) {
+                reviewBlockReasonEl.classList.remove('hidden');
+                reviewBlockReasonEl.textContent = dispute.reviewBlockReason;
+            }
         } else if (dispute.status === 'UNDER_REVIEW') {
-            // Show resolution actions
             resolutionActionsEl.classList.remove('hidden');
         }
     }
@@ -484,6 +471,7 @@ const AdminDisputeDetail = (function() {
         renderParties(dispute);
         renderReason(dispute);
         renderEvidence(dispute);
+        renderSellerProposal(dispute);
         renderTimeline(dispute);
         renderActions(dispute);
     }
@@ -491,6 +479,10 @@ const AdminDisputeDetail = (function() {
     // Action Functions
     async function startReview() {
         if (!state.disputeId) return;
+        if (state.dispute && state.dispute.canAdminReview === false) {
+            alert(state.dispute.reviewBlockReason || 'Chưa đủ điều kiện để admin bắt đầu review');
+            return;
+        }
         
         if (!confirm('Bạn có chắc chắn muốn bắt đầu xem xét khiếu nại này?')) return;
         

@@ -12,11 +12,11 @@ import com.group3.accounttrade.entity.User;
 import com.group3.accounttrade.repository.AuditLogRepository;
 import com.group3.accounttrade.repository.CredentialAssignmentRepository;
 import com.group3.accounttrade.repository.CredentialStatusRepository;
-import com.group3.accounttrade.repository.NotificationRepository;
 import com.group3.accounttrade.repository.OrderItemRepository;
 import com.group3.accounttrade.repository.OrderRepository;
 import com.group3.accounttrade.repository.OrderStatusRepository;
 import com.group3.accounttrade.repository.PostCredentialRepository;
+import com.group3.accounttrade.service.notification.NotificationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -55,7 +55,7 @@ class CredentialServiceTest {
     private AuditLogRepository auditLogRepository;
 
     @Mock
-    private NotificationRepository notificationRepository;
+    private NotificationService notificationService;
 
     @Mock
     private PostService postService;
@@ -76,7 +76,7 @@ class CredentialServiceTest {
 
         when(credentialStatusRepository.findByStatusName(CredentialService.STATUS_AVAILABLE)).thenReturn(Optional.of(availableStatus));
         when(credentialStatusRepository.findByStatusName(CredentialService.STATUS_HOLDING)).thenReturn(Optional.of(holdingStatus));
-        when(postCredentialRepository.findFirstByPost_PostIdAndCredentialStatusOrderByCreatedAtAsc(9, availableStatus))
+        when(postCredentialRepository.findFirstByPost_PostIdAndCredentialStatus_StatusNameOrderByCreatedAtAsc(9, CredentialService.STATUS_AVAILABLE))
                 .thenReturn(Optional.of(credential));
         when(postCredentialRepository.save(any(PostCredential.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(auditLogRepository.save(any(AuditLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -89,15 +89,14 @@ class CredentialServiceTest {
     @Test
     void releaseOrderCredentialsUpdatesPostStockAfterReturningHeldCredential() {
         Post post = Post.builder().postId(9).title("Coursera").stockStatus(StockStatus.OUT_OF_STOCK).build();
-        OrderItem orderItem = OrderItem.builder().orderItemId(20L).post(post).build();
-        Order order = Order.builder().orderId(10L).orderNumber("ORD-10").orderItems(List.of(orderItem)).build();
         CredentialStatus availableStatus = CredentialStatus.builder().statusName(CredentialService.STATUS_AVAILABLE).build();
         CredentialStatus holdingStatus = CredentialStatus.builder().statusName(CredentialService.STATUS_HOLDING).build();
         PostCredential credential = PostCredential.builder().credentialId(100).post(post).credentialStatus(holdingStatus).build();
+        OrderItem orderItem = OrderItem.builder().orderItemId(20L).post(post).assignedCredential(credential).build();
+        Order order = Order.builder().orderId(10L).orderNumber("ORD-10").orderItems(List.of(orderItem)).build();
 
         when(credentialStatusRepository.findByStatusName(CredentialService.STATUS_AVAILABLE)).thenReturn(Optional.of(availableStatus));
         when(credentialStatusRepository.findByStatusName(CredentialService.STATUS_HOLDING)).thenReturn(Optional.of(holdingStatus));
-        when(postCredentialRepository.findByPost_PostIdAndCredentialStatus(9, holdingStatus)).thenReturn(List.of(credential));
         when(postCredentialRepository.save(any(PostCredential.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(auditLogRepository.save(any(AuditLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
 

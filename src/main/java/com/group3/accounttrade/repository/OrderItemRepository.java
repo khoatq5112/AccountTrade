@@ -37,6 +37,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
             JOIN o.buyer b
             JOIN o.orderStatus os
             WHERE oi.seller = :seller
+              AND UPPER(os.statusName) <> 'PAYMENT_FAILED'
               AND (:status IS NULL OR :status = '' OR LOWER(os.statusName) = LOWER(:status))
               AND (
                     :keyword IS NULL OR :keyword = '' OR
@@ -51,6 +52,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
             JOIN o.buyer b
             JOIN o.orderStatus os
             WHERE oi.seller = :seller
+              AND UPPER(os.statusName) <> 'PAYMENT_FAILED'
               AND (:status IS NULL OR :status = '' OR LOWER(os.statusName) = LOWER(:status))
               AND (
                     :keyword IS NULL OR :keyword = '' OR

@@ -32,7 +32,7 @@ public class AdminTransactionService {
             LocalDateTime from, LocalDateTime to, Pageable pageable) {
 
         // Fetch paginated orders from DB with eager fetching of buyer, orderStatus, orderItems, sellers
-        Page<Order> orderPage = orderRepository.findAllForAdmin(pageable);
+        Page<Order> orderPage = orderRepository.findAllForAdminExcludingStatus(OrderStatus.PAYMENT_FAILED, pageable);
 
         List<TransactionDTO> dtos = orderPage.getContent().stream()
                 .filter(order -> filterByStatus(order, status))
@@ -94,7 +94,7 @@ public class AdminTransactionService {
 
     @Transactional(readOnly = true)
     public TransactionStatsDTO getTransactionStats() {
-        long total = orderRepository.count();
+        long total = Math.max(0, orderRepository.count() - orderRepository.countByOrderStatusStatusName(OrderStatus.PAYMENT_FAILED));
 
         long pending = orderRepository.countByOrderStatusStatusName(OrderStatus.PENDING);
         long completed = orderRepository.countByOrderStatusStatusName(OrderStatus.COMPLETED);

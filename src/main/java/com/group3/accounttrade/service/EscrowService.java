@@ -132,7 +132,7 @@ public class EscrowService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
         
-        Escrow escrow = escrowRepository.findByOrder(order)
+        Escrow escrow = escrowRepository.findByOrderForUpdate(order)
                 .orElseThrow(() -> new IllegalArgumentException("Escrow not found for order: " + orderId));
 
         // Check if escrow can be released
@@ -208,7 +208,7 @@ public class EscrowService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
         
-        Escrow escrow = escrowRepository.findByOrder(order)
+        Escrow escrow = escrowRepository.findByOrderForUpdate(order)
                 .orElseThrow(() -> new IllegalArgumentException("Escrow not found for order: " + orderId));
 
         // Can only freeze from HOLDING status
@@ -255,7 +255,7 @@ public class EscrowService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
         
-        Escrow escrow = escrowRepository.findByOrder(order)
+        Escrow escrow = escrowRepository.findByOrderForUpdate(order)
                 .orElseThrow(() -> new IllegalArgumentException("Escrow not found for order: " + orderId));
 
         // Can only unfreeze from FROZEN status
@@ -310,7 +310,7 @@ public class EscrowService {
                 });
         log.info("[DEBUG] Found order: {}", order.getOrderNumber());
         
-        Escrow escrow = escrowRepository.findByOrder(order)
+        Escrow escrow = escrowRepository.findByOrderForUpdate(order)
                 .orElseThrow(() -> {
                     log.error("[DEBUG] Escrow not found for order: {}", orderId);
                     return new IllegalArgumentException("Escrow not found for order: " + orderId);

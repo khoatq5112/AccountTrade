@@ -40,6 +40,8 @@ public class WalletApiController {
         response.put("success", true);
         response.put("balance", walletService.getBalance(user));
         response.put("minimumTopUpAmount", walletService.getMinimumTopUpAmount());
+        response.put("maximumTopUpAmount", walletService.getMaximumTopUpAmount());
+        response.put("topUpPresetAmounts", walletService.getPresetTopUpAmounts());
         response.put("transactionHistory", walletService.getTransactionHistory(user).stream()
                 .map(item -> {
                     Map<String, Object> transaction = new LinkedHashMap<>();
@@ -85,6 +87,9 @@ public class WalletApiController {
         response.put("walletBalance", preview.walletBalance());
         response.put("deficitAmount", preview.deficitAmount());
         response.put("suggestedTopUpAmount", preview.suggestedTopUpAmount());
+        response.put("minimumTopUpAmount", walletService.getMinimumTopUpAmount());
+        response.put("maximumTopUpAmount", walletService.getMaximumTopUpAmount());
+        response.put("topUpPresetAmounts", walletService.getPresetTopUpAmounts());
         response.put("hasSufficientBalance", preview.hasSufficientBalance());
         return ResponseEntity.ok(response);
     }

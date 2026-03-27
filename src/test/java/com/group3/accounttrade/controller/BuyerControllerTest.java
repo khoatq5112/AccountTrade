@@ -10,6 +10,8 @@ import com.group3.accounttrade.repository.UserRepository;
 import com.group3.accounttrade.repository.WalletRepository;
 import com.group3.accounttrade.service.BuyerOrderService;
 import com.group3.accounttrade.service.CartService;
+import com.group3.accounttrade.service.CloudinaryService;
+import com.group3.accounttrade.service.DisputeService;
 import com.group3.accounttrade.service.OrderCheckoutService;
 import com.group3.accounttrade.service.WalletService;
 import com.group3.accounttrade.util.IdEncoder;
@@ -73,6 +75,12 @@ class BuyerControllerTest {
     private WalletService walletService;
 
     @Mock
+    private DisputeService disputeService;
+
+    @Mock
+    private CloudinaryService cloudinaryService;
+
+    @Mock
     private IdEncoder idEncoder;
 
     @InjectMocks
@@ -116,13 +124,21 @@ class BuyerControllerTest {
                         .suggestedTopUpAmount(BigDecimal.ZERO)
                         .hasSufficientBalance(true)
                         .build());
-        when(walletService.getMinimumTopUpAmount()).thenReturn(BigDecimal.valueOf(10000));
+        when(walletService.getMinimumTopUpAmount()).thenReturn(BigDecimal.valueOf(20000));
+        when(walletService.getMaximumTopUpAmount()).thenReturn(BigDecimal.valueOf(5000000));
+        when(walletService.getPresetTopUpAmounts()).thenReturn(List.of(
+                BigDecimal.valueOf(100000),
+                BigDecimal.valueOf(200000),
+                BigDecimal.valueOf(500000),
+                BigDecimal.valueOf(1000000),
+                BigDecimal.valueOf(2000000)
+        ));
         when(idEncoder.decodePostId("5")).thenReturn(5);
         when(idEncoder.encodePostId(5)).thenReturn("post_5token");
 
         Model model = new ExtendedModelMap();
 
-        String viewName = buyerController.checkout("5", null, model);
+        String viewName = buyerController.checkout("5", null, null, null, model);
 
         assertEquals("checkout", viewName);
         assertEquals(post, model.getAttribute("post"));
@@ -143,7 +159,7 @@ class BuyerControllerTest {
 
         Model model = new ExtendedModelMap();
 
-        String viewName = buyerController.checkout("5", null, model);
+        String viewName = buyerController.checkout("5", null, null, null, model);
 
         assertEquals("redirect:/marketplace/post_5token?error=unavailable", viewName);
     }
@@ -234,6 +250,25 @@ class BuyerControllerTest {
     }
 
     @Test
+    void checkoutRejectsInvalidPaymentMethod() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(buyerController).build();
+        User buyer = User.builder().userId(1).username("buyer").build();
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("buyer", "pw", List.of()));
+        when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
+        when(idEncoder.decodePostId("9")).thenReturn(9);
+        when(idEncoder.encodePostId(9)).thenReturn("post_9token");
+
+        mockMvc.perform(post("/buyer/checkout")
+                        .param("postId", "9")
+                        .param("paymentMethod", "BITCOIN"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/marketplace/post_9token"))
+                .andExpect(flash().attribute("errorMessage", "Phương thức thanh toán không hợp lệ."));
+    }
+
+    @Test
     void topUpValidationErrorRedirectsBackToCheckoutWhenPurchaseIsPending() throws Exception {
         MockMvc mockMvc = MockMvcBuilders.standaloneSetup(buyerController).build();
         User buyer = User.builder().userId(1).username("buyer").build();
@@ -242,7 +277,7 @@ class BuyerControllerTest {
                 new UsernamePasswordAuthenticationToken("buyer", "pw", List.of()));
         when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
         when(idEncoder.decodePostId("9")).thenReturn(9);
-        doThrow(new IllegalArgumentException("Số tiền nạp tối thiểu là 10,000 ₫."))
+        doThrow(new IllegalArgumentException("Số tiền nạp tối thiểu là 20,000 ₫."))
                 .when(walletService)
                 .initiateTopUp(eq(buyer),
                         eq(BigDecimal.valueOf(5000)),
@@ -256,6 +291,24 @@ class BuyerControllerTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/buyer/checkout?postId=9"))
                 .andExpect(flash().attributeExists("errorMessage"));
+    }
+
+    @Test
+    void openDisputeRejectsTooLongDescriptionBeforeUploadingEvidence() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(buyerController).build();
+        User buyer = User.builder().userId(1).username("buyer").build();
+        String longDescription = "a".repeat(2001);
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("buyer", "pw", List.of()));
+        when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
+
+        mockMvc.perform(post("/buyer/orders/55/disputes")
+                        .param("reason", DisputeService.REASON_INVALID_CREDENTIAL)
+                        .param("description", longDescription))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/buyer/purchases?orderId=55"))
+                .andExpect(flash().attribute("errorMessage", "Mô tả khiếu nại không được vượt quá 2000 ký tự."));
     }
 
     @Test
@@ -298,5 +351,38 @@ class BuyerControllerTest {
         assertEquals(2, highlightedOrders.size());
         assertTrue(highlightedOrders.stream().anyMatch(order -> order.getOrderId().equals(44L)));
         assertTrue(highlightedOrders.stream().anyMatch(order -> order.getOrderId().equals(45L)));
+    }
+
+    @Test
+    void purchasesHidePaymentFailedOrders() {
+        User buyer = User.builder().userId(1).username("buyer").build();
+        Order failedOrder = Order.builder()
+                .orderId(46L)
+                .createdAt(LocalDateTime.now().minusHours(2))
+                .orderStatus(com.group3.accounttrade.entity.OrderStatus.builder()
+                        .statusName(com.group3.accounttrade.entity.OrderStatus.PAYMENT_FAILED)
+                        .build())
+                .build();
+        Order activeOrder = Order.builder()
+                .orderId(47L)
+                .createdAt(LocalDateTime.now().minusHours(1))
+                .orderStatus(com.group3.accounttrade.entity.OrderStatus.builder()
+                        .statusName(com.group3.accounttrade.entity.OrderStatus.AWAITING_PAYMENT)
+                        .build())
+                .build();
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("buyer", "pw", List.of()));
+        when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
+        when(walletRepository.findByUser_UserId(1)).thenReturn(Optional.empty());
+        when(orderRepository.findByBuyer(buyer)).thenReturn(List.of(failedOrder, activeOrder));
+
+        Model model = new ExtendedModelMap();
+        String view = buyerController.viewPurchases(null, null, null, model, null);
+
+        assertEquals("buyer_purchases", view);
+        List<Order> orders = (List<Order>) model.getAttribute("workflowOrders");
+        assertEquals(1, orders.size());
+        assertEquals(47L, orders.get(0).getOrderId());
     }
 }

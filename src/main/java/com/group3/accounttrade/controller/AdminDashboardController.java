@@ -238,13 +238,17 @@ public class AdminDashboardController {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Admin not found"));
         }
         
-        disputeService.startReview(disputeId, admin.getUserId());
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("message", "Dispute review started");
-        response.put("disputeId", disputeId);
-        return ResponseEntity.ok(response);
+        try {
+            disputeService.startReview(disputeId, admin.getUserId());
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Dispute review started");
+            response.put("disputeId", disputeId);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
+        }
     }
 
     /**

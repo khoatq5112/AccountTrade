@@ -7,6 +7,7 @@ import com.group3.accounttrade.entity.*;
 import com.group3.accounttrade.repository.CategoryRepository;
 import com.group3.accounttrade.repository.UserRepository;
 import com.group3.accounttrade.repository.WalletRepository;
+import com.group3.accounttrade.service.CloudinaryService;
 import com.group3.accounttrade.service.DisputeService;
 import com.group3.accounttrade.service.PostService;
 import com.group3.accounttrade.service.SellerDashboardService;
@@ -45,6 +46,7 @@ public class SellerController {
     private final PostService postService;
     private final SellerDashboardService sellerDashboardService;
     private final DisputeService disputeService;
+    private final CloudinaryService cloudinaryService;
     private final UserRepository userRepository;
     private final WalletRepository walletRepository;
     private final IdEncoder idEncoder;
@@ -781,6 +783,7 @@ public class SellerController {
         model.addAttribute("currentUser", user);
         model.addAttribute("wallet", wallet);
         model.addAttribute("dispute", dispute);
+        model.addAttribute("replacementCredentials", disputeService.getReplacementCandidates(disputeId, user.getUserId()));
 
         return "seller_dispute_detail";
     }
@@ -792,6 +795,10 @@ public class SellerController {
     public String submitDisputeResponse(@PathVariable Long disputeId,
                                          @RequestParam String response,
                                          @RequestParam(required = false) String evidence,
+                                         @RequestParam(required = false) MultipartFile[] evidenceImages,
+                                         @RequestParam(required = false) String proposalType,
+                                         @RequestParam(required = false) String proposalNote,
+                                         @RequestParam(required = false) Integer proposalCredentialId,
                                          Authentication authentication,
                                          RedirectAttributes redirectAttributes) {
         String username = authentication.getName();
@@ -801,7 +808,33 @@ public class SellerController {
         }
 
         try {
-            disputeService.submitSellerResponse(disputeId, user.getUserId(), response, evidence);
+            List<String> imageUrls = new java.util.ArrayList<>();
+            if (evidenceImages != null) {
+                for (MultipartFile file : evidenceImages) {
+                    if (file == null || file.isEmpty()) {
+                        continue;
+                    }
+                    try {
+                        String imageUrl = cloudinaryService.uploadImage(file);
+                        if (imageUrl != null && !imageUrl.isBlank()) {
+                            imageUrls.add(imageUrl);
+                        }
+                    } catch (Exception e) {
+                        redirectAttributes.addFlashAttribute("errorMessage", "Không thể tải một trong các ảnh evidence lên.");
+                        return "redirect:/seller/disputes/" + disputeId;
+                    }
+                }
+            }
+            disputeService.submitSellerResponse(
+                    disputeId,
+                    user.getUserId(),
+                    response,
+                    evidence,
+                    imageUrls,
+                    proposalType,
+                    proposalNote,
+                    proposalCredentialId
+            );
             redirectAttributes.addFlashAttribute("successMessage", "Phản hồi đã được gửi thành công.");
         } catch (IllegalArgumentException | IllegalStateException e) {
             redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());

@@ -2,6 +2,7 @@ package com.group3.accounttrade.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Check;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
@@ -10,6 +11,7 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "Wallets")
+@Check(constraints = "balance >= 0 and frozen_balance >= 0")
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

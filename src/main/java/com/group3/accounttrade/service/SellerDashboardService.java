@@ -9,6 +9,7 @@ import com.group3.accounttrade.repository.UserRepository;
 import com.group3.accounttrade.repository.WalletRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -90,8 +91,13 @@ public class SellerDashboardService {
         String normalizedKeyword = keyword != null ? keyword.trim() : null;
         String normalizedStatus = status != null && !status.isBlank() ? status.trim() : null;
 
-        return orderItemRepository.findSellerOrderItems(seller, normalizedKeyword, normalizedStatus, pageable)
-                .map(this::toSellerOrderRow);
+        List<SellerOrderRow> rows = orderItemRepository.findSellerOrderItems(seller, normalizedKeyword, normalizedStatus, pageable)
+                .stream()
+                .filter(orderItem -> !hasStatus(orderItem.getOrder(), OrderStatus.PAYMENT_FAILED))
+                .map(this::toSellerOrderRow)
+                .toList();
+
+        return new PageImpl<>(rows, pageable, rows.size());
     }
 
     private boolean hasStatus(Order order, String statusName) {

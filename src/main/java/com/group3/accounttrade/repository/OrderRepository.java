@@ -60,6 +60,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT COUNT(o) FROM Order o WHERE o.buyer = :buyer AND o.orderStatus.statusName IN :statusNames")
     long countByBuyerAndStatusIn(User buyer, List<String> statusNames);
 
+    @Query("""
+            SELECT DISTINCT o
+            FROM Order o
+            JOIN o.orderItems oi
+            WHERE o.buyer = :buyer
+            AND oi.post.postId = :postId
+            AND o.orderStatus.statusName IN :statusNames
+            """)
+    List<Order> findByBuyerAndPostIdAndStatusIn(User buyer, Integer postId, List<String> statusNames);
+
     List<Order> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
 
     @Query("SELECT DISTINCT o FROM Order o JOIN o.orderItems oi WHERE oi.seller = :seller")
@@ -76,9 +86,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            "LEFT JOIN FETCH o.buyer " +
            "LEFT JOIN FETCH o.orderStatus " +
            "LEFT JOIN FETCH o.orderItems oi " +
-           "LEFT JOIN FETCH oi.seller",
-           countQuery = "SELECT COUNT(DISTINCT o) FROM Order o")
-    Page<Order> findAllForAdmin(Pageable pageable);
+           "LEFT JOIN FETCH oi.seller " +
+           "WHERE o.orderStatus.statusName <> :excludedStatus",
+           countQuery = "SELECT COUNT(DISTINCT o) FROM Order o WHERE o.orderStatus.statusName <> :excludedStatus")
+    Page<Order> findAllForAdminExcludingStatus(String excludedStatus, Pageable pageable);
 
     /**
      * Count orders by order status name.

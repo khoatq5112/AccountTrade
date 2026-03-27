@@ -41,6 +41,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -48,6 +49,15 @@ import java.util.stream.Collectors;
 @RequestMapping("/buyer")
 @RequiredArgsConstructor
 public class BuyerController {
+    private static final int MAX_DISPUTE_REASON_LENGTH = 100;
+    private static final int MAX_DISPUTE_DESCRIPTION_LENGTH = 2000;
+    private static final Set<String> ALLOWED_DISPUTE_REASONS = Set.of(
+            DisputeService.REASON_INVALID_CREDENTIAL,
+            DisputeService.REASON_CREDENTIAL_CHANGED,
+            DisputeService.REASON_NOT_AS_DESCRIBED,
+            DisputeService.REASON_NO_CREDENTIAL_RECEIVED,
+            DisputeService.REASON_OTHER
+    );
 
     private final PostRepository postRepository;
     private final OrderRepository orderRepository;
@@ -102,6 +112,8 @@ public class BuyerController {
     @GetMapping("/wallet")
     public String buyerWallet(Model model,
                                @RequestParam(required = false) Boolean topupSuccess,
+                               @RequestParam(required = false) Boolean topupSandboxReturnConfirmed,
+                               @RequestParam(required = false) Boolean topupPending,
                                @RequestParam(required = false) Boolean topupFailed) {
         User user = getCurrentUser();
         if (user == null) {
@@ -110,11 +122,17 @@ public class BuyerController {
         model.addAttribute("currentUser", user);
         BigDecimal walletBalance = walletService.getBalance(user);
         model.addAttribute("walletBalance", walletBalance);
-        model.addAttribute("minimumTopUpAmount", walletService.getMinimumTopUpAmount());
         model.addAttribute("transactionHistory", walletService.getTransactionHistory(user));
         model.addAttribute("topUpHistory", walletService.getTopUpHistory(user));
+        addTopUpOptions(model);
         if (Boolean.TRUE.equals(topupSuccess)) {
             model.addAttribute("successMessage", "Nạp tiền vào ví thành công!");
+        }
+        if (Boolean.TRUE.equals(topupSandboxReturnConfirmed)) {
+            model.addAttribute("infoMessage", "Sandbox VNPAY đã xác nhận top-up ngay trên callback RETURN. Trong production, ví sẽ chờ IPN để hoàn tất.");
+        }
+        if (Boolean.TRUE.equals(topupPending)) {
+            model.addAttribute("infoMessage", "VNPAY đang đồng bộ giao dịch nạp tiền. Số dư ví sẽ cập nhật ngay khi IPN được xác nhận.");
         }
         if (Boolean.TRUE.equals(topupFailed)) {
             model.addAttribute("errorMessage", "Nạp tiền thất bại. Vui lòng thử lại.");
@@ -125,6 +143,8 @@ public class BuyerController {
     @GetMapping("/checkout")
     public String checkout(@RequestParam String postId,
                            @RequestParam(required = false) Boolean topupSuccess,
+                           @RequestParam(required = false) Boolean topupSandboxReturnConfirmed,
+                           @RequestParam(required = false) Boolean topupPending,
                            Model model) {
         Integer decodedPostId;
         try {
@@ -149,7 +169,7 @@ public class BuyerController {
             model.addAttribute("walletDeficit", preview.deficitAmount());
             model.addAttribute("suggestedTopUpAmount", preview.suggestedTopUpAmount());
             model.addAttribute("hasSufficientBalance", preview.hasSufficientBalance());
-            model.addAttribute("minimumTopUpAmount", walletService.getMinimumTopUpAmount());
+            addTopUpOptions(model);
         } catch (IllegalArgumentException e) {
             if ("You cannot purchase your own post".equals(e.getMessage())) {
                 return "redirect:/marketplace/" + encodedPostId + "?error=own_post";
@@ -163,6 +183,12 @@ public class BuyerController {
         model.addAttribute("isAuthenticated", true);
         if (Boolean.TRUE.equals(topupSuccess)) {
             model.addAttribute("successMessage", "Nạp tiền thành công. Bạn có thể hoàn tất thanh toán bằng ví ngay bây giờ.");
+        }
+        if (Boolean.TRUE.equals(topupSandboxReturnConfirmed)) {
+            model.addAttribute("infoMessage", "Sandbox VNPAY đã xác nhận top-up ngay trên callback RETURN. Bạn có thể tiếp tục checkout bằng số dư mới.");
+        }
+        if (Boolean.TRUE.equals(topupPending)) {
+            model.addAttribute("infoMessage", "Giao dịch nạp tiền đang chờ VNPAY xác nhận. Trang này sẽ dùng số dư mới ngay khi IPN hoàn tất.");
         }
         return "checkout";
     }
@@ -212,7 +238,15 @@ public class BuyerController {
             return "redirect:/marketplace/" + encodedPostId;
         }
 
-        if ("WALLET".equalsIgnoreCase(paymentMethod)) {
+        PaymentMethod resolvedPaymentMethod;
+        try {
+            resolvedPaymentMethod = PaymentMethod.from(paymentMethod);
+        } catch (IllegalArgumentException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+            return "redirect:/marketplace/" + encodedPostId;
+        }
+
+        if (resolvedPaymentMethod == PaymentMethod.WALLET) {
             try {
                 Order order = orderCheckoutService.initiateWalletCheckout(user, decodedPostId);
                 redirectAttributes.addFlashAttribute("successMessage",
@@ -387,32 +421,42 @@ public class BuyerController {
         }
 
         try {
+            String normalizedReason = normalizeDisputeReason(reason);
+            String normalizedDescription = normalizeDisputeDescription(description);
             log.info("[DISPUTE] User {} opening dispute for order {}", user.getUsername(), orderId);
             
             // Upload images to Cloudinary and collect URLs
             List<String> imageUrls = new ArrayList<>();
+            int selectedEvidenceCount = 0;
             if (evidenceImages != null && evidenceImages.length > 0) {
                 log.info("[DISPUTE] Processing {} evidence images", evidenceImages.length);
                 for (MultipartFile file : evidenceImages) {
-                    if (file != null && !file.isEmpty()) {
-                        try {
-                            String imageUrl = cloudinaryService.uploadImage(file);
-                            if (imageUrl != null) {
-                                imageUrls.add(imageUrl);
-                                log.info("[DISPUTE] Uploaded image: {}", imageUrl);
-                            }
-                        } catch (Exception e) {
-                            log.warn("[DISPUTE] Failed to upload dispute evidence image: {}", e.getMessage());
+                    if (file == null || file.isEmpty()) {
+                        continue;
+                    }
+                    selectedEvidenceCount++;
+                    try {
+                        String imageUrl = cloudinaryService.uploadImage(file);
+                        if (imageUrl == null || imageUrl.isBlank()) {
+                            throw new IllegalStateException("Cloudinary did not return a URL for dispute evidence");
                         }
+                        imageUrls.add(imageUrl);
+                        log.info("[DISPUTE] Uploaded image: {}", imageUrl);
+                    } catch (Exception e) {
+                        log.warn("[DISPUTE] Failed to upload dispute evidence image: {}", e.getMessage(), e);
+                        throw new IllegalStateException("Không thể tải ảnh bằng chứng lên. Vui lòng thử lại.");
                     }
                 }
+            }
+            if (selectedEvidenceCount > 0 && imageUrls.size() != selectedEvidenceCount) {
+                throw new IllegalStateException("Không thể tải đầy đủ ảnh bằng chứng lên. Vui lòng thử lại.");
             }
 
             // Open dispute with image evidence
             log.info("[DISPUTE] Calling disputeService.openDispute with orderId={}, buyerId={}, reason={}, description={}, imageCount={}",
-                    orderId, user.getUserId(), reason, description, imageUrls.size());
+                    orderId, user.getUserId(), normalizedReason, normalizedDescription, imageUrls.size());
             
-            Dispute dispute = disputeService.openDispute(orderId, user.getUserId(), reason, description, imageUrls);
+            Dispute dispute = disputeService.openDispute(orderId, user.getUserId(), normalizedReason, normalizedDescription, imageUrls);
             
             log.info("[DISPUTE] Dispute created successfully with ID: {}", dispute.getDisputeId());
             redirectAttributes.addFlashAttribute("successMessage",
@@ -567,6 +611,68 @@ public class BuyerController {
         return "redirect:/buyer/disputes";
     }
 
+    @PostMapping("/disputes/{disputeId}/accept-refund")
+    public String acceptSellerRefund(@PathVariable Long disputeId, RedirectAttributes redirectAttributes) {
+        User user = getCurrentUser();
+        if (user == null) {
+            return "redirect:/login.html?redirect=/buyer/disputes/" + disputeId;
+        }
+        if (isSellerAccount(user)) {
+            return "redirect:/marketplace?error=seller_restricted";
+        }
+
+        try {
+            disputeService.acceptSellerRefund(disputeId, user.getUserId());
+            redirectAttributes.addFlashAttribute("successMessage", "Bạn đã chấp nhận đề xuất hoàn tiền của seller.");
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+        }
+
+        return "redirect:/buyer/disputes/" + disputeId;
+    }
+
+    @PostMapping("/disputes/{disputeId}/accept-replacement")
+    public String acceptSellerReplacement(@PathVariable Long disputeId, RedirectAttributes redirectAttributes) {
+        User user = getCurrentUser();
+        if (user == null) {
+            return "redirect:/login.html?redirect=/buyer/disputes/" + disputeId;
+        }
+        if (isSellerAccount(user)) {
+            return "redirect:/marketplace?error=seller_restricted";
+        }
+
+        try {
+            disputeService.acceptSellerReplacement(disputeId, user.getUserId());
+            redirectAttributes.addFlashAttribute("successMessage", "Bạn đã chấp nhận phương án thay thế. Hãy kiểm tra credential mới.");
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+        }
+
+        return "redirect:/buyer/disputes/" + disputeId;
+    }
+
+    @PostMapping("/disputes/{disputeId}/escalate")
+    public String escalateDispute(@PathVariable Long disputeId,
+                                  @RequestParam(required = false) String reason,
+                                  RedirectAttributes redirectAttributes) {
+        User user = getCurrentUser();
+        if (user == null) {
+            return "redirect:/login.html?redirect=/buyer/disputes/" + disputeId;
+        }
+        if (isSellerAccount(user)) {
+            return "redirect:/marketplace?error=seller_restricted";
+        }
+
+        try {
+            disputeService.escalateDispute(disputeId, user.getUserId(), reason);
+            redirectAttributes.addFlashAttribute("successMessage", "Khiếu nại đã được chuyển sang bước admin xem xét.");
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+        }
+
+        return "redirect:/buyer/disputes/" + disputeId;
+    }
+
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
@@ -596,7 +702,42 @@ public class BuyerController {
         if (highlightedOrderId != null && highlightedOrderId.equals(order.getOrderId())) {
             return true;
         }
-        return order.getOrderStatus() == null
-                || !OrderStatus.PAYMENT_EXPIRED.equalsIgnoreCase(order.getOrderStatus().getStatusName());
+        if (order.getOrderStatus() == null) {
+            return true;
+        }
+        String statusName = order.getOrderStatus().getStatusName();
+        return !OrderStatus.PAYMENT_EXPIRED.equalsIgnoreCase(statusName)
+                && !OrderStatus.PAYMENT_FAILED.equalsIgnoreCase(statusName);
+    }
+
+    private void addTopUpOptions(Model model) {
+        model.addAttribute("minimumTopUpAmount", walletService.getMinimumTopUpAmount());
+        model.addAttribute("maximumTopUpAmount", walletService.getMaximumTopUpAmount());
+        model.addAttribute("topUpPresetAmounts", walletService.getPresetTopUpAmounts());
+    }
+
+    private String normalizeDisputeReason(String reason) {
+        String normalized = reason == null ? "" : reason.trim();
+        if (normalized.isEmpty()) {
+            throw new IllegalArgumentException("Vui lòng chọn lý do khiếu nại.");
+        }
+        if (normalized.length() > MAX_DISPUTE_REASON_LENGTH) {
+            throw new IllegalArgumentException("Lý do khiếu nại quá dài.");
+        }
+        if (!ALLOWED_DISPUTE_REASONS.contains(normalized)) {
+            throw new IllegalArgumentException("Lý do khiếu nại không hợp lệ.");
+        }
+        return normalized;
+    }
+
+    private String normalizeDisputeDescription(String description) {
+        if (description == null) {
+            return null;
+        }
+        String normalized = description.trim();
+        if (normalized.length() > MAX_DISPUTE_DESCRIPTION_LENGTH) {
+            throw new IllegalArgumentException("Mô tả khiếu nại không được vượt quá 2000 ký tự.");
+        }
+        return normalized.isEmpty() ? null : normalized;
     }
 }

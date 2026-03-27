@@ -35,6 +35,7 @@ public class BuyerOrderService {
     @Transactional(readOnly = true)
     public List<Order> getOrders(User buyer) {
         return orderRepository.findByBuyer(buyer).stream()
+                .filter(order -> !hasStatus(order, OrderStatus.PAYMENT_FAILED))
                 .sorted(Comparator.comparing(Order::getCreatedAt).reversed())
                 .toList();
     }

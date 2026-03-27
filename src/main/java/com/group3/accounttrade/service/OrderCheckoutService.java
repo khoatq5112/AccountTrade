@@ -27,12 +27,20 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class OrderCheckoutService {
 
     private static final int DEFAULT_QUANTITY = 1;
+    private static final Set<String> ACTIVE_ORDER_STATUSES = Set.of(
+            OrderStatus.AWAITING_PAYMENT,
+            OrderStatus.PAID,
+            OrderStatus.PROCESSING,
+            OrderStatus.CREDENTIAL_ASSIGNED,
+            OrderStatus.AWAITING_BUYER_CONFIRMATION
+    );
 
     private final PostRepository postRepository;
     private final OrderRepository orderRepository;
@@ -52,6 +60,7 @@ public class OrderCheckoutService {
     @Transactional
     public CheckoutSession initiateCheckout(User buyer, Integer postId, HttpServletRequest request) {
         Post post = validatePostForCheckout(buyer, postId);
+        assertNoActiveOrderForPost(buyer, postId);
 
         OrderStatus awaitingPaymentStatus = orderStatusRepository.findByStatusName(OrderStatus.AWAITING_PAYMENT)
                 .orElseThrow(() -> new IllegalStateException("AWAITING_PAYMENT status not found"));
@@ -138,6 +147,7 @@ public class OrderCheckoutService {
     public Order initiateWalletCheckout(User buyer, Integer postId) {
         WalletCheckoutPreview preview = previewWalletCheckout(buyer, postId);
         Post post = preview.post();
+        assertNoActiveOrderForPost(buyer, postId);
 
         if (!preview.hasSufficientBalance()) {
             throw new WalletService.InsufficientBalanceException(
@@ -207,6 +217,16 @@ public class OrderCheckoutService {
         cartRepository.findByUserAndPost(buyer, post).ifPresent(cartRepository::delete);
 
         return order;
+    }
+
+    private void assertNoActiveOrderForPost(User buyer, Integer postId) {
+        List<Order> existingOrders = orderRepository.findByBuyerAndPostIdAndStatusIn(
+                buyer,
+                postId,
+                List.copyOf(ACTIVE_ORDER_STATUSES));
+        if (!existingOrders.isEmpty()) {
+            throw new IllegalStateException("Bạn đã có một đơn hàng đang xử lý cho sản phẩm này.");
+        }
     }
 
     private Post validatePostForCheckout(User buyer, Integer postId) {

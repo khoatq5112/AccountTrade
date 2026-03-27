@@ -9,6 +9,7 @@ import com.group3.accounttrade.entity.Payment;
 import com.group3.accounttrade.entity.PaymentStatus;
 import com.group3.accounttrade.entity.PaymentCallback;
 import com.group3.accounttrade.entity.User;
+import com.group3.accounttrade.entity.WalletTopUp;
 import com.group3.accounttrade.repository.AuditLogRepository;
 import com.group3.accounttrade.repository.EscrowRepository;
 import com.group3.accounttrade.repository.EscrowStatusRepository;
@@ -87,7 +88,7 @@ class VnpayPaymentServiceTest {
     private VnpayPaymentService vnpayPaymentService;
 
     @Test
-    void processReturnCallbackConfirmsTopUpBeforeRedirectingBackToCheckout() {
+    void processReturnCallbackConfirmsTopUpFromReturnInSandboxMode() {
         HttpServletRequest request = org.mockito.Mockito.mock(HttpServletRequest.class);
         Map<String, String> params = new HashMap<>();
         params.put("vnp_TxnRef", "TU-12345");
@@ -100,9 +101,11 @@ class VnpayPaymentServiceTest {
         when(request.getQueryString()).thenReturn("vnp_TxnRef=TU-12345");
         when(request.getHeader("User-Agent")).thenReturn("JUnit");
         when(vnpayConfig.validateChecksum(params)).thenReturn(true);
+        when(vnpayConfig.isSandboxMode()).thenReturn(true);
         when(vnpayConfig.getClientIpAddress(request)).thenReturn("127.0.0.1");
         when(paymentCallbackRepository.save(any(PaymentCallback.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(walletService.getPendingPostIdForTopUp("TU-12345")).thenReturn(12);
+        when(walletService.getTopUpStatus("TU-12345")).thenReturn(WalletTopUp.STATUS_COMPLETED);
 
         VnpayPaymentService.PaymentResult result = vnpayPaymentService.processReturnCallback(params, request);
 
@@ -110,6 +113,34 @@ class VnpayPaymentServiceTest {
         assertTrue(result.isTopUp());
         assertEquals(12, result.getPendingPostId());
         verify(walletService).confirmTopUp("TU-12345", "999888");
+    }
+
+    @Test
+    void processReturnCallbackKeepsTopUpPendingOutsideSandboxMode() {
+        HttpServletRequest request = org.mockito.Mockito.mock(HttpServletRequest.class);
+        Map<String, String> params = new HashMap<>();
+        params.put("vnp_TxnRef", "TU-12345");
+        params.put("vnp_TransactionNo", "999888");
+        params.put("vnp_ResponseCode", VnpayConfig.RESPONSE_SUCCESS);
+        params.put("vnp_TransactionStatus", VnpayConfig.TXN_STATUS_SUCCESS);
+        params.put("vnp_Amount", "21000000");
+        params.put("vnp_SecureHash", "hash");
+
+        when(request.getQueryString()).thenReturn("vnp_TxnRef=TU-12345");
+        when(request.getHeader("User-Agent")).thenReturn("JUnit");
+        when(vnpayConfig.validateChecksum(params)).thenReturn(true);
+        when(vnpayConfig.isSandboxMode()).thenReturn(false);
+        when(vnpayConfig.getClientIpAddress(request)).thenReturn("127.0.0.1");
+        when(paymentCallbackRepository.save(any(PaymentCallback.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(walletService.getPendingPostIdForTopUp("TU-12345")).thenReturn(12);
+        when(walletService.getTopUpStatus("TU-12345")).thenReturn(WalletTopUp.STATUS_PENDING);
+
+        VnpayPaymentService.PaymentResult result = vnpayPaymentService.processReturnCallback(params, request);
+
+        assertTrue(result.isPending());
+        assertTrue(result.isTopUp());
+        assertEquals(12, result.getPendingPostId());
+        verify(walletService, never()).confirmTopUp("TU-12345", "999888");
     }
 
     @Test

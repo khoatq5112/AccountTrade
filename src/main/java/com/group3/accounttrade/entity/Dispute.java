@@ -93,6 +93,31 @@ public class Dispute {
     private String sellerEvidence;
 
     /**
+     * Seller proposal while dispute is still being negotiated.
+     * Values: REFUND, REPLACEMENT, DENY
+     */
+    @Column(name = "seller_proposal_type", length = 50)
+    private String sellerProposalType;
+
+    /**
+     * Seller proposal note shown to buyer/admin.
+     */
+    @Column(name = "seller_proposal_note", columnDefinition = "TEXT")
+    private String sellerProposalNote;
+
+    /**
+     * Optional credential selected by seller for a replacement proposal.
+     */
+    @Column(name = "seller_proposal_credential_id")
+    private Integer sellerProposalCredentialId;
+
+    /**
+     * Timestamp when seller last proposed a resolution.
+     */
+    @Column(name = "seller_proposed_at")
+    private LocalDateTime sellerProposedAt;
+
+    /**
      * Admin's notes (internal).
      */
     @Column(name = "admin_notes", columnDefinition = "TEXT")
@@ -129,6 +154,18 @@ public class Dispute {
      */
     @Column(name = "seller_response_deadline")
     private LocalDateTime sellerResponseDeadline;
+
+    /**
+     * Timestamp when buyer explicitly escalated to admin.
+     */
+    @Column(name = "buyer_escalated_at")
+    private LocalDateTime buyerEscalatedAt;
+
+    /**
+     * Optional escalation reason from buyer.
+     */
+    @Column(name = "buyer_escalation_reason", columnDefinition = "TEXT")
+    private String buyerEscalationReason;
 
     /**
      * Timestamp when admin started review.
@@ -177,4 +214,9 @@ public class Dispute {
     public static final String RESOLUTION_REPLACEMENT = "REPLACEMENT";
     public static final String RESOLUTION_PARTIAL_REFUND = "PARTIAL_REFUND";
     public static final String RESOLUTION_NO_ACTION = "NO_ACTION";
+
+    // Seller proposal constants
+    public static final String PROPOSAL_REFUND = "REFUND";
+    public static final String PROPOSAL_REPLACEMENT = "REPLACEMENT";
+    public static final String PROPOSAL_DENY = "DENY";
 }
