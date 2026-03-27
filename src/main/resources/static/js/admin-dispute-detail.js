@@ -141,7 +141,7 @@ const AdminDisputeDetail = (function() {
                 textColor: 'text-red-700',
                 icon: 'ph-warning-circle',
                 text: 'Đang thương lượng',
-                description: 'Admin theo dõi, chỉ can thiệp khi buyer escalate hoặc seller quá hạn'
+                description: 'Admin theo dõi, có thể can thiệp khi buyer escalate, seller đưa ra đề xuất hoặc seller quá hạn'
             },
             'UNDER_REVIEW': {
                 bgColor: 'bg-orange-100',

@@ -651,6 +651,29 @@ public class BuyerController {
         return "redirect:/buyer/disputes/" + disputeId;
     }
 
+    @PostMapping("/disputes/{disputeId}/replacement-failed")
+    public String reportReplacementFailure(@PathVariable Long disputeId,
+                                           @RequestParam(required = false) String reason,
+                                           RedirectAttributes redirectAttributes) {
+        User user = getCurrentUser();
+        if (user == null) {
+            return "redirect:/login.html?redirect=/buyer/disputes/" + disputeId;
+        }
+        if (isSellerAccount(user)) {
+            return "redirect:/marketplace?error=seller_restricted";
+        }
+
+        try {
+            disputeService.reportReplacementFailure(disputeId, user.getUserId(), reason);
+            redirectAttributes.addFlashAttribute("successMessage",
+                    "Đã chuyển dispute sang admin vì credential thay thế vẫn không hoạt động.");
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+        }
+
+        return "redirect:/buyer/disputes/" + disputeId;
+    }
+
     @PostMapping("/disputes/{disputeId}/escalate")
     public String escalateDispute(@PathVariable Long disputeId,
                                   @RequestParam(required = false) String reason,

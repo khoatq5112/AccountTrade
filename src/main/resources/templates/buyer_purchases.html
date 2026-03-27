@@ -53,6 +53,7 @@
             const form = document.getElementById('disputeForm');
             const context = document.getElementById('disputeModalContext');
 
+            resetSelectedEvidenceFiles();
             form.action = '/buyer/orders/' + orderId + '/disputes';
             context.textContent = 'Đơn #' + orderNumber + ' - ' + productTitle;
             modal.classList.remove('hidden');
@@ -63,6 +64,7 @@
             const modal = document.getElementById('disputeModal');
             const form = document.getElementById('disputeForm');
             form.reset();
+            resetSelectedEvidenceFiles();
             modal.classList.add('hidden');
             modal.classList.remove('flex');
         }
@@ -477,6 +479,12 @@
         // Store selected files globally
         let selectedFiles = [];
 
+        function resetSelectedEvidenceFiles() {
+            selectedFiles = [];
+            updateImagePreview();
+            updateFileInput();
+        }
+
         function handleImageSelection(input) {
             const maxFiles = 5;
             const maxFileSize = 5 * 1024 * 1024; // 5MB
@@ -577,8 +585,7 @@
             const disputeForm = document.getElementById('disputeForm');
             if (disputeForm) {
                 disputeForm.addEventListener('submit', function(e) {
-                    // Files are already set via updateFileInput()
-                    // Form will submit normally with multipart data
+                    updateFileInput();
                 });
             }
         });

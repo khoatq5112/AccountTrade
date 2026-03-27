@@ -43,6 +43,13 @@ public record DisputeDetailDTO(
     List<DisputeMessageDTO> messages,
     List<DisputeEventDTO> timeline
 ) {
+    public DisputeDetailDTO {
+        buyerEvidenceImages = buyerEvidenceImages == null ? List.of() : List.copyOf(buyerEvidenceImages);
+        sellerEvidenceImages = sellerEvidenceImages == null ? List.of() : List.copyOf(sellerEvidenceImages);
+        messages = messages == null ? List.of() : List.copyOf(messages);
+        timeline = timeline == null ? List.of() : List.copyOf(timeline);
+    }
+
     
     /**
      * Order information included in dispute detail.

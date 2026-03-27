@@ -433,6 +433,11 @@
                         <i class="ph ph-scales text-error"></i> Hành động của bạn
                     </h2>
                     <div class="space-y-3">
+                        <div th:if="${dispute.resolutionType == 'REPLACEMENT'}"
+                             class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                            Seller đã cấp credential thay thế. Hãy vào đơn hàng để kiểm tra lại credential mới.
+                            Nếu dùng được, bạn có thể bấm Nhận hàng. Nếu vẫn lỗi, hãy dùng nút bên dưới để chuyển admin hoàn tiền.
+                        </div>
                         <form th:if="${dispute.sellerProposalType == 'REFUND'}"
                               th:action="@{/buyer/disputes/{id}/accept-refund(id=${dispute.disputeId})}"
                               method="POST"
@@ -442,7 +447,7 @@
                                 <i class="ph ph-check-circle"></i> Chấp nhận hoàn tiền
                             </button>
                         </form>
-                        <form th:if="${dispute.sellerProposalType == 'REPLACEMENT'}"
+                        <form th:if="${dispute.sellerProposalType == 'REPLACEMENT' and dispute.resolutionType != 'REPLACEMENT'}"
                               th:action="@{/buyer/disputes/{id}/accept-replacement(id=${dispute.disputeId})}"
                               method="POST"
                               onsubmit="return confirm('Bạn xác nhận chấp nhận credential thay thế?');">
@@ -451,7 +456,23 @@
                                 <i class="ph ph-check-circle"></i> Chấp nhận thay thế
                             </button>
                         </form>
-                        <form th:action="@{/buyer/disputes/{id}/escalate(id=${dispute.disputeId})}"
+                        <a th:if="${dispute.resolutionType == 'REPLACEMENT'}"
+                           th:href="@{/buyer/purchases(orderId=${dispute.order.orderId}, revealCredentialsOrderId=${dispute.order.orderId})}"
+                           class="btn-outline w-full flex items-center justify-center gap-2 bg-white">
+                            <i class="ph ph-key"></i> Xem credential thay thế
+                        </a>
+                        <form th:if="${dispute.resolutionType == 'REPLACEMENT'}"
+                              th:action="@{/buyer/disputes/{id}/replacement-failed(id=${dispute.disputeId})}"
+                              method="POST"
+                              onsubmit="return confirm('Xác nhận rằng credential thay thế vẫn không hoạt động và chuyển admin xử lý hoàn tiền?');">
+                            <input type="hidden" th:name="${_csrf != null ? _csrf.parameterName : ''}" th:value="${_csrf != null ? _csrf.token : ''}" />
+                            <input type="hidden" name="reason" value="Replacement credential still does not work. Buyer requested admin refund review." />
+                            <button type="submit" class="btn-danger w-full flex items-center justify-center gap-2">
+                                <i class="ph ph-warning-circle"></i> Credential thay thế vẫn lỗi
+                            </button>
+                        </form>
+                        <form th:if="${dispute.resolutionType != 'REPLACEMENT'}"
+                              th:action="@{/buyer/disputes/{id}/escalate(id=${dispute.disputeId})}"
                               method="POST"
                               onsubmit="return confirm('Bạn muốn chuyển dispute này cho admin xử lý?');">
                             <input type="hidden" th:name="${_csrf != null ? _csrf.parameterName : ''}" th:value="${_csrf != null ? _csrf.token : ''}" />
@@ -460,7 +481,8 @@
                                 <i class="ph ph-gavel"></i> Chuyển admin xem xét
                             </button>
                         </form>
-                        <form th:action="@{/buyer/disputes/{id}/cancel(id=${dispute.disputeId})}"
+                        <form th:if="${dispute.resolutionType != 'REPLACEMENT'}"
+                              th:action="@{/buyer/disputes/{id}/cancel(id=${dispute.disputeId})}"
                               method="POST"
                               onsubmit="return confirm('Bạn có chắc muốn hủy khiếu nại này?');">
                             <input type="hidden" th:name="${_csrf != null ? _csrf.parameterName : ''}" th:value="${_csrf != null ? _csrf.token : ''}" />

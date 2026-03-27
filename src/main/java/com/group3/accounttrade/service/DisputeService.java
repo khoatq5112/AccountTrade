@@ -485,16 +485,21 @@ public class DisputeService {
         }
 
         Order order = requireOrder(dispute);
-        dispute.setDisputeStatus(getDisputeStatus(STATUS_CANCELLED));
-        dispute.setResolvedAt(LocalDateTime.now());
-        dispute.setResolutionType("CANCELLED");
-        dispute.setResolutionNotes("Buyer accepted seller replacement proposal");
+        dispute.setBuyerEscalatedAt(null);
+        dispute.setBuyerEscalationReason(null);
+        dispute.setAdminReviewStartedAt(null);
+        dispute.setResolvedByAdmin(null);
+        dispute.setResolutionType(Dispute.RESOLUTION_REPLACEMENT);
+        dispute.setResolutionNotes("Buyer accepted seller replacement proposal and is re-checking the new credential");
+        dispute.setResolvedAt(null);
         disputeRepository.save(dispute);
 
         escrowService.unfreezeEscrow(order.getOrderId(), "Buyer accepted seller replacement proposal");
         order.setOrderStatus(getOrderStatus(OrderStatus.AWAITING_BUYER_CONFIRMATION));
         order.setConfirmationDeadline(LocalDateTime.now().plusHours(verificationTimeoutHours));
         orderRepository.save(order);
+        addDisputeActivityMessage(dispute, dispute.getOpenedBy(), DisputeMessage.ROLE_BUYER,
+                "Buyer accepted the seller replacement proposal and is verifying the new credential.");
 
         createAuditLog(dispute.getOpenedBy(), "BUYER_ACCEPTED_REPLACEMENT", "Dispute", disputeId,
                 String.format("Buyer accepted seller replacement proposal for dispute %s", dispute.getDisputeNumber()),
@@ -503,7 +508,55 @@ public class DisputeService {
         notifySeller(dispute, "Replacement Accepted",
                 String.format("Buyer accepted your replacement proposal for dispute %s.", dispute.getDisputeNumber()));
         notifyBuyer(dispute, "Replacement Accepted",
-                String.format("Dispute %s was settled by replacement. Please verify the new credential.", dispute.getDisputeNumber()));
+                String.format("Replacement was accepted for dispute %s. Please verify the new credential before confirming receipt.",
+                        dispute.getDisputeNumber()));
+    }
+
+    @Transactional
+    public void reportReplacementFailure(Long disputeId, Integer buyerId, String reason) {
+        Dispute dispute = getDisputeOrThrow(disputeId);
+        if (!dispute.getOpenedBy().getUserId().equals(buyerId)) {
+            throw new IllegalStateException("Only the buyer can report replacement failure");
+        }
+        ensureOpened(dispute, "Dispute is no longer open for replacement follow-up");
+        if (!Dispute.PROPOSAL_REPLACEMENT.equals(dispute.getSellerProposalType())
+                || dispute.getSellerProposalCredentialId() == null
+                || !Dispute.RESOLUTION_REPLACEMENT.equals(dispute.getResolutionType())) {
+            throw new IllegalStateException("Replacement has not been accepted for this dispute");
+        }
+
+        Order order = requireOrder(dispute);
+        String escalationReason = normalizeText(reason,
+                "Replacement credential still does not work. Buyer requested admin refund review.");
+
+        dispute.setBuyerEscalatedAt(LocalDateTime.now());
+        dispute.setBuyerEscalationReason(escalationReason);
+        dispute.setDisputeStatus(getDisputeStatus(STATUS_UNDER_REVIEW));
+        dispute.setAdminReviewStartedAt(LocalDateTime.now());
+        dispute.setResolutionNotes(escalationReason);
+        disputeRepository.save(dispute);
+
+        order.setOrderStatus(getOrderStatus(OrderStatus.DISPUTED));
+        order.setConfirmationDeadline(null);
+        orderRepository.save(order);
+
+        escrowService.freezeEscrow(order.getOrderId(), "Replacement credential failed. Escalated for admin refund review");
+        credentialService.markCredentialsAsDisputed(order, escalationReason);
+        createAdminReviewRecord(disputeId, escalationReason);
+        addDisputeActivityMessage(dispute, dispute.getOpenedBy(), DisputeMessage.ROLE_BUYER, escalationReason);
+
+        createAuditLog(dispute.getOpenedBy(), "REPLACEMENT_FAILED_ESCALATED", "Dispute", disputeId,
+                String.format("Buyer reported replacement failure for dispute %s", dispute.getDisputeNumber()),
+                AuditLog.ROLE_BUYER);
+
+        notifyBuyer(dispute, "Replacement Escalated",
+                String.format("Dispute %s was moved to admin review after the replacement failed.", dispute.getDisputeNumber()));
+        notifySeller(dispute, "Replacement Escalated",
+                String.format("Buyer reported that the replacement still failed for dispute %s. Admin review has started.",
+                        dispute.getDisputeNumber()));
+        notifyAdmins("Replacement Failure Review",
+                String.format("Dispute %s requires admin refund review because the replacement credential still failed.",
+                        dispute.getDisputeNumber()));
     }
 
     @Transactional
@@ -536,8 +589,7 @@ public class DisputeService {
         }
         disputeRepository.save(dispute);
 
-        createAdminReviewRecord(disputeId,
-                dispute.getBuyerEscalationReason() != null ? dispute.getBuyerEscalationReason() : "Seller response deadline exceeded");
+        createAdminReviewRecord(disputeId, buildReviewTriggerReason(dispute));
         createAuditLog(admin, "REVIEW_STARTED", "Dispute", disputeId,
                 String.format("Admin review started for dispute %s", dispute.getDisputeNumber()),
                 AuditLog.ROLE_ADMIN);
@@ -722,11 +774,11 @@ public class DisputeService {
                 dispute.getReason(),
                 dispute.getBuyerEvidence(),
                 buyerEvidence.text(),
-                buyerEvidence.images(),
+                buyerEvidence.images() == null ? List.of() : buyerEvidence.images(),
                 dispute.getSellerResponse(),
                 dispute.getSellerEvidence(),
                 sellerEvidence.text(),
-                sellerEvidence.images(),
+                sellerEvidence.images() == null ? List.of() : sellerEvidence.images(),
                 dispute.getSellerProposalType(),
                 dispute.getSellerProposalNote(),
                 dispute.getSellerProposalCredentialId(),
@@ -780,10 +832,33 @@ public class DisputeService {
         if (dispute.getBuyerEscalatedAt() != null) {
             return null;
         }
+        if (dispute.getSellerProposalType() != null && !dispute.getSellerProposalType().isBlank()) {
+            return null;
+        }
         if (dispute.getSellerResponseDeadline() != null && dispute.getSellerResponseDeadline().isBefore(LocalDateTime.now())) {
             return null;
         }
-        return "Admin review is blocked until buyer escalates or seller response deadline expires";
+        return "Admin review is blocked until buyer escalates, seller proposes a resolution, or seller response deadline expires";
+    }
+
+    private String buildReviewTriggerReason(Dispute dispute) {
+        if (dispute.getBuyerEscalationReason() != null && !dispute.getBuyerEscalationReason().isBlank()) {
+            return dispute.getBuyerEscalationReason();
+        }
+        if (dispute.getSellerProposalType() != null && !dispute.getSellerProposalType().isBlank()) {
+            return "Seller proposed resolution: " + dispute.getSellerProposalType();
+        }
+        return "Seller response deadline exceeded";
+    }
+
+    private void addDisputeActivityMessage(Dispute dispute, User sender, String senderRole, String content) {
+        disputeMessageRepository.save(DisputeMessage.builder()
+                .dispute(dispute)
+                .sender(sender)
+                .senderRole(senderRole)
+                .content(content)
+                .hasAttachment(false)
+                .build());
     }
 
     private PostCredential reserveReplacementCredential(Dispute dispute,

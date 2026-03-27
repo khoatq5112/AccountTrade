@@ -141,11 +141,11 @@
             </aside>
 
             <!-- Main Content -->
-            <main class="flex-1 min-w-0">
-                <div class="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
-                    <div class="space-y-6 min-w-0">
+            <main class="flex-1 min-w-0 w-full">
+                <div class="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start w-full">
+                    <div class="space-y-6 min-w-0 w-full">
                 <!-- Dispute Header -->
-                <div class="card">
+                <div class="card w-full">
                     <div class="flex justify-between items-start mb-4">
                         <div>
                             <h1 class="text-2xl font-bold text-gray-900" th:text="${dispute.disputeNumber}">DSP-001</h1>
@@ -238,7 +238,7 @@
                     </div>
                 </div>
 
-                <div th:if="${dispute.status == 'OPENED'}" class="card bg-green-50 border-green-100">
+                <div th:if="${dispute.status == 'OPENED'}" class="card w-full bg-green-50 border-green-100">
                     <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                         <i class="ph ph-chat-circle-text text-success"></i> Phản hồi khiếu nại
                     </h2>
@@ -312,7 +312,7 @@
                 </div>
 
                 <!-- Resolution Section (if resolved) -->
-                <div th:if="${dispute.status == 'RESOLVED' or dispute.status == 'CANCELLED'}" class="card">
+                <div th:if="${dispute.status == 'RESOLVED' or dispute.status == 'CANCELLED'}" class="card w-full">
                     <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                         <i class="ph ph-check-circle text-success"></i> Kết quả
                     </h2>
@@ -399,11 +399,12 @@
                         </div>
                     </form>
                     </div>
+                    </div><!-- End left column -->
 
-            <!-- Right Column - Info -->
-            <aside class="space-y-6 xl:sticky xl:top-28 self-start">
+                <!-- Right Column - Info -->
+                <aside class="space-y-6 2xl:sticky 2xl:top-28 self-start">
                 <!-- Order Info -->
-                <div class="card">
+                <div class="card w-full">
                     <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                         <i class="ph ph-shopping-bag text-primary"></i> Thông tin đơn hàng
                     </h2>
@@ -424,7 +425,7 @@
                 </div>
 
                 <!-- Parties Info -->
-                <div class="card">
+                <div class="card w-full">
                     <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                         <i class="ph ph-users text-primary"></i> Các bên liên quan
                     </h2>
@@ -504,10 +505,10 @@
                     </div>
                 </div>
             </aside>
-        </div>
-    </main>
-        </div>
-    </div>
+            </div><!-- End grid -->
+        </main>
+    </div><!-- End flex row -->
+</div><!-- End container -->
 
     <!-- Footer -->
     <footer class="bg-gray-900 text-white py-8 mt-12">
