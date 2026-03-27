@@ -420,6 +420,8 @@ public class DisputeService {
 
         notifyBuyer(dispute, "Seller Responded",
                 String.format("Seller updated the response for dispute %s.", dispute.getDisputeNumber()));
+        notifyAdmins(dispute, "Seller Responded",
+                String.format("Seller updated the response for dispute %s.", dispute.getDisputeNumber()));
     }
 
     public List<PostCredential> getReplacementCandidates(Long disputeId, Integer sellerId) {
