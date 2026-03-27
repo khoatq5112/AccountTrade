@@ -6,6 +6,7 @@ import com.group3.accounttrade.repository.*;
 import com.group3.accounttrade.service.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -111,6 +112,32 @@ public class VnpayPaymentService {
 
     public String generateTxnRef(Order order) {
         return vnpayConfig.generateTxnRef(order.getOrderNumber());
+    }
+
+    @Scheduled(fixedRate = 60000)
+    @Transactional
+    public void expireStaleAwaitingPayments() {
+        expireStaleAwaitingPayments(LocalDateTime.now());
+    }
+
+    protected void expireStaleAwaitingPayments(LocalDateTime now) {
+        LocalDateTime cutoff = now.minusMinutes(vnpayConfig.getTimeoutMinutes());
+        List<Order> expiredOrders = orderRepository.findExpiredAwaitingPaymentOrders(
+                cutoff,
+                OrderStatus.AWAITING_PAYMENT);
+
+        if (expiredOrders.isEmpty()) {
+            return;
+        }
+
+        OrderStatus paymentExpiredStatus = orderStatusRepository.findByStatusName(OrderStatus.PAYMENT_EXPIRED)
+                .orElseThrow(() -> new IllegalStateException("PAYMENT_EXPIRED order status not found"));
+        PaymentStatus failedPaymentStatus = paymentStatusRepository.findByStatusName(PaymentStatus.FAILED)
+                .orElseThrow(() -> new IllegalStateException("FAILED payment status not found"));
+
+        for (Order order : expiredOrders) {
+            expireAwaitingPaymentOrder(order, paymentExpiredStatus, failedPaymentStatus, now);
+        }
     }
 
     /**
@@ -414,6 +441,51 @@ public class VnpayPaymentService {
         callback.setProcessingResult("Payment processed successfully");
     }
 
+    private void expireAwaitingPaymentOrder(Order order,
+            OrderStatus paymentExpiredStatus,
+            PaymentStatus failedPaymentStatus,
+            LocalDateTime now) {
+
+        if (order.getOrderStatus() == null
+                || !OrderStatus.AWAITING_PAYMENT.equalsIgnoreCase(order.getOrderStatus().getStatusName())) {
+            return;
+        }
+
+        Optional<Payment> paymentOpt = paymentRepository.findByOrder(order);
+        if (paymentOpt.isPresent() && isPaidPayment(paymentOpt.get())) {
+            log.info("Skipping auto-expire for order {} because payment is already successful", order.getOrderNumber());
+            return;
+        }
+        if (order.getPaidAt() != null) {
+            log.info("Skipping auto-expire for order {} because order is already paid", order.getOrderNumber());
+            return;
+        }
+
+        String timeoutReason = String.format("Payment timeout after %d minutes", vnpayConfig.getTimeoutMinutes());
+
+        order.setOrderStatus(paymentExpiredStatus);
+        order.setCancelledAt(now);
+        order.setCancellationReason(timeoutReason);
+        orderRepository.save(order);
+
+        paymentOpt.ifPresent(payment -> {
+            if (!isPaidPayment(payment)) {
+                payment.setPaymentStatus(failedPaymentStatus);
+                payment.setFailedAt(now);
+                payment.setErrorMessage(timeoutReason);
+                paymentRepository.save(payment);
+            }
+        });
+
+        credentialService.releaseOrderCredentials(order);
+        notifyPaymentExpired(order);
+        createAuditLog(null, "PAYMENT_EXPIRED", AuditLog.EVENT_PAYMENT,
+                paymentOpt.map(Payment::getPaymentId).orElse(null),
+                timeoutReason, null);
+
+        log.info("Auto-expired awaiting-payment order {} after timeout", order.getOrderNumber());
+    }
+
     /**
      * Handles payment failure.
      */
@@ -449,6 +521,12 @@ public class VnpayPaymentService {
                 String.format("Payment failed. ResponseCode: %s", responseCode), null);
         
         callback.setProcessingResult(String.format("Payment failed: %s", responseCode));
+    }
+
+    private boolean isPaidPayment(Payment payment) {
+        return payment.getPaidAt() != null
+                || (payment.getPaymentStatus() != null
+                && PaymentStatus.PAID.equalsIgnoreCase(payment.getPaymentStatus().getStatusName()));
     }
 
     /**
@@ -541,6 +619,39 @@ public class VnpayPaymentService {
                 .build();
 
         auditLogRepository.save(auditLog);
+    }
+
+    private void notifyPaymentExpired(Order order) {
+        notificationService.createNotification(
+                order.getBuyer(),
+                Notification.TYPE_PAYMENT,
+                NotificationPreference.CATEGORY_PAYMENT,
+                "Đơn hàng " + order.getOrderNumber() + " đã hết hạn thanh toán",
+                "Phiên thanh toán đã quá thời gian chờ. Tài khoản giữ chỗ đã được hoàn lại kho, vui lòng checkout lại nếu vẫn muốn mua.",
+                Notification.PRIORITY_NORMAL,
+                "ORDER",
+                order.getOrderId(),
+                "/buyer/purchases?orderId=" + order.getOrderId()
+        );
+
+        User seller = order.getOrderItems().stream()
+                .map(OrderItem::getSeller)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+        if (seller != null) {
+            notificationService.createNotification(
+                    seller,
+                    Notification.TYPE_ORDER,
+                    NotificationPreference.CATEGORY_ORDER,
+                    "Đơn hàng " + order.getOrderNumber() + " đã hết hạn thanh toán",
+                    "Buyer chưa hoàn tất thanh toán trong thời gian cho phép. Credential giữ chỗ đã được hoàn lại kho.",
+                    Notification.PRIORITY_NORMAL,
+                    "ORDER",
+                    order.getOrderId(),
+                    "/seller/orders"
+            );
+        }
     }
 
     /**

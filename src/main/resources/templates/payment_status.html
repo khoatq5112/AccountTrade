@@ -13,12 +13,16 @@
 <main class="mx-auto max-w-3xl px-4 py-12">
     <section class="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
         <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Order Tracking</p>
-        <h1 class="mt-3 text-3xl font-extrabold">Đơn hàng đang được đối soát</h1>
+        <h1 class="mt-3 text-3xl font-extrabold" th:text="${statusContent != null ? statusContent.title : 'Đơn hàng đang được đối soát'}">Đơn hàng đang được đối soát</h1>
         <p class="mt-4 text-slate-600">
-            Đơn hàng <strong th:text="${orderId}">0</strong> đang chờ hệ thống đồng bộ trạng thái từ VNPAY và workflow escrow.
+            Đơn hàng <strong th:text="${orderId}">0</strong>
+            <span th:text="${statusContent != null ? statusContent.description : 'đang chờ hệ thống đồng bộ trạng thái từ VNPAY và workflow escrow.'}">đang chờ hệ thống đồng bộ trạng thái từ VNPAY và workflow escrow.</span>
         </p>
-        <div class="mt-6 rounded-2xl border border-sky-100 bg-sky-50 px-5 py-4 text-sky-800">
-            Sau khi IPN xác nhận thành công, TrustBridge sẽ tiếp tục gán credential đã giữ chỗ và chuyển đơn sang bước chờ buyer xác nhận.
+        <div class="mt-6 rounded-2xl px-5 py-4"
+             th:classappend="${statusContent != null and statusContent.tone == 'expired'} ? ' border border-amber-100 bg-amber-50 text-amber-800' : (${statusContent != null and statusContent.tone == 'failed'} ? ' border border-rose-100 bg-rose-50 text-rose-800' : ' border border-sky-100 bg-sky-50 text-sky-800')">
+            <span th:text="${statusContent != null ? statusContent.helper : 'Sau khi IPN xác nhận thành công, TrustBridge sẽ tiếp tục gán credential đã giữ chỗ và chuyển đơn sang bước chờ buyer xác nhận.'}">
+                Sau khi IPN xác nhận thành công, TrustBridge sẽ tiếp tục gán credential đã giữ chỗ và chuyển đơn sang bước chờ buyer xác nhận.
+            </span>
         </div>
         <div class="mt-8 flex flex-col gap-3 sm:flex-row">
             <a href="/buyer/purchases" class="rounded-2xl bg-sky-600 px-5 py-3 text-center font-bold text-white hover:bg-sky-700">

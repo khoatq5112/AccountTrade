@@ -1,5 +1,6 @@
 package com.group3.accounttrade.controller;
 
+import com.group3.accounttrade.exception.InvalidIdException;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.LazyInitializationException;
 import org.springframework.http.HttpStatus;
@@ -41,6 +42,17 @@ public class ApiExceptionHandler {
             IllegalArgumentException exception, WebRequest request) {
         log.error("[API-ERROR] IllegalArgumentException: {}", exception.getMessage());
         return createErrorResponse(exception.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(InvalidIdException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidIdException(
+            InvalidIdException exception, WebRequest request) {
+        log.error("[API-ERROR] InvalidIdException: {}", exception.getMessage(), exception);
+        String errorMessage = "ID không hợp lệ.";
+        if (exception.getIdType() != null) {
+            errorMessage = String.format("ID %s không hợp lệ.", exception.getIdType());
+        }
+        return createErrorResponse(errorMessage, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(IllegalStateException.class)

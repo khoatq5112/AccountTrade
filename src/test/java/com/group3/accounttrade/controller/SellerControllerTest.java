@@ -51,7 +51,7 @@ class SellerControllerTest {
         MockMvc mockMvc = MockMvcBuilders.standaloneSetup(sellerController).build();
 
         MockMultipartFile thumbnailFile =
-                new MockMultipartFile("thumbnailFile", "", "application/octet-stream", new byte[0]);
+                new MockMultipartFile("thumbnailFile", "thumb.jpg", "image/jpeg", new byte[] {1, 2, 3});
 
         mockMvc.perform(multipart("/seller/posts")
                         .file(thumbnailFile)
@@ -66,6 +66,48 @@ class SellerControllerTest {
                         .param("credentials[1].accountUsername", "khoa411")
                         .param("credentials[1].accountPassword", "654321")
                         .param("credentials[1].securityNotes", "Profile 2"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/seller/posts"))
+                .andExpect(flash().attributeExists("successMessage"));
+
+        verify(postService).createPost(any(), eq("sellerAccount"));
+    }
+
+    @Test
+    void createPostRejectsMissingThumbnail() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(sellerController).build();
+
+        MockMultipartFile thumbnailFile =
+                new MockMultipartFile("thumbnailFile", "", "application/octet-stream", new byte[0]);
+
+        mockMvc.perform(multipart("/seller/posts")
+                        .file(thumbnailFile)
+                        .principal(new UsernamePasswordAuthenticationToken("sellerAccount", "pw", List.of()))
+                        .param("title", "Duolingo Max")
+                        .param("price", "300000")
+                        .param("categoryId", "1")
+                        .param("description", "<p>Mo ta</p>")
+                        .param("credentials[0].accountUsername", "abcde")
+                        .param("credentials[0].accountPassword", "123456"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void createPostAcceptsDescriptionContainingOnlyImage() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(sellerController).build();
+
+        MockMultipartFile thumbnailFile =
+                new MockMultipartFile("thumbnailFile", "thumb.jpg", "image/jpeg", new byte[] {1, 2, 3});
+
+        mockMvc.perform(multipart("/seller/posts")
+                        .file(thumbnailFile)
+                        .principal(new UsernamePasswordAuthenticationToken("sellerAccount", "pw", List.of()))
+                        .param("title", "Netflix Premium")
+                        .param("price", "300000")
+                        .param("categoryId", "1")
+                        .param("description", "<p><img src=\"https://example.com/image.jpg\"></p>")
+                        .param("credentials[0].accountUsername", "abcde")
+                        .param("credentials[0].accountPassword", "123456"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/seller/posts"))
                 .andExpect(flash().attributeExists("successMessage"));

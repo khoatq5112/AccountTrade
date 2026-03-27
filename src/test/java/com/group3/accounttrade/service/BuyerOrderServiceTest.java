@@ -31,11 +31,12 @@ class BuyerOrderServiceTest {
         User buyer = User.builder().userId(7).username("buyer").build();
 
         Order awaitingPayment = order(OrderStatus.AWAITING_PAYMENT, BigDecimal.valueOf(100_000), LocalDateTime.now().minusDays(3));
+        Order paymentExpired = order(OrderStatus.PAYMENT_EXPIRED, BigDecimal.valueOf(50_000), LocalDateTime.now().minusDays(2));
         Order awaitingConfirmation = order(OrderStatus.AWAITING_BUYER_CONFIRMATION, BigDecimal.valueOf(200_000), LocalDateTime.now().minusDays(2));
         Order disputed = order(OrderStatus.DISPUTED, BigDecimal.valueOf(300_000), LocalDateTime.now().minusDays(1));
         Order completed = order(OrderStatus.COMPLETED, BigDecimal.valueOf(400_000), LocalDateTime.now());
 
-        when(orderRepository.findByBuyer(buyer)).thenReturn(List.of(awaitingPayment, awaitingConfirmation, disputed, completed));
+        when(orderRepository.findByBuyer(buyer)).thenReturn(List.of(paymentExpired, awaitingPayment, awaitingConfirmation, disputed, completed));
 
         BuyerOrderService.BuyerDashboardSummary summary = buyerOrderService.getDashboardSummary(buyer);
 
@@ -43,7 +44,7 @@ class BuyerOrderServiceTest {
         assertEquals(2, summary.escrowCount());
         assertEquals(BigDecimal.valueOf(400_000), summary.totalSpent());
         assertEquals(1, summary.completedCount());
-        assertEquals(4, summary.orders().size());
+        assertEquals(5, summary.orders().size());
         assertEquals(3, summary.pendingOrders().size());
     }
 

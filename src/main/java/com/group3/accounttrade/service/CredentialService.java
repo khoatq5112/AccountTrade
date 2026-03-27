@@ -378,17 +378,23 @@ public class CredentialService {
                 .orElseThrow(() -> new IllegalStateException("Holding status not found"));
 
         int releasedCount = 0;
+        Set<Integer> affectedPostIds = new LinkedHashSet<>();
         for (OrderItem item : order.getOrderItems()) {
-            List<PostCredential> holdingCredentials = postCredentialRepository
-                    .findByPost_PostIdAndCredentialStatus(item.getPost().getPostId(), holdingStatus);
-
-            for (PostCredential credential : holdingCredentials) {
+            PostCredential credential = item.getAssignedCredential();
+            if (credential != null
+                    && credential.getCredentialStatus() != null
+                    && holdingStatus.getStatusName().equalsIgnoreCase(credential.getCredentialStatus().getStatusName())) {
                 credential.setCredentialStatus(availableStatus);
                 postCredentialRepository.save(credential);
                 releasedCount++;
+                if (credential.getPost() != null && credential.getPost().getPostId() != null) {
+                    affectedPostIds.add(credential.getPost().getPostId());
+                }
             }
+        }
 
-            syncPostStockStatus(item.getPost());
+        for (Integer postId : affectedPostIds) {
+            syncPostStockStatus(postId);
         }
 
         // Create audit log

@@ -4,6 +4,7 @@ import com.group3.accounttrade.entity.Cart;
 import com.group3.accounttrade.entity.User;
 import com.group3.accounttrade.repository.UserRepository;
 import com.group3.accounttrade.service.CartService;
+import com.group3.accounttrade.util.IdEncoder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -20,6 +21,7 @@ public class CartController {
 
     private final CartService cartService;
     private final UserRepository userRepository;
+    private final IdEncoder idEncoder;
 
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -30,14 +32,15 @@ public class CartController {
     }
 
     @PostMapping("/add")
-    public ResponseEntity<?> addToCart(@RequestParam Integer postId) {
+    public ResponseEntity<?> addToCart(@RequestParam String postId) {
         User user = getCurrentUser();
         if (user == null) {
             return ResponseEntity.status(401).body(Map.of("message", "Please login first"));
         }
 
         try {
-            Cart cart = cartService.addToCart(user, postId);
+            Integer decodedPostId = idEncoder.decodePostId(postId);
+            Cart cart = cartService.addToCart(user, decodedPostId);
             return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Added to cart successfully"
@@ -77,14 +80,15 @@ public class CartController {
     }
 
     @DeleteMapping("/remove/{postId}")
-    public ResponseEntity<?> removeFromCart(@PathVariable Integer postId) {
+    public ResponseEntity<?> removeFromCart(@PathVariable String postId) {
         User user = getCurrentUser();
         if (user == null) {
             return ResponseEntity.status(401).body(Map.of("message", "Please login first"));
         }
 
         try {
-            cartService.removeFromCart(user, postId);
+            Integer decodedPostId = idEncoder.decodePostId(postId);
+            cartService.removeFromCart(user, decodedPostId);
             return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Removed from cart successfully"

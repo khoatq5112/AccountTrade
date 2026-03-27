@@ -4,6 +4,7 @@ import com.group3.accounttrade.entity.Order;
 import com.group3.accounttrade.entity.OrderItem;
 import com.group3.accounttrade.repository.OrderRepository;
 import com.group3.accounttrade.service.VnpayPaymentService;
+import com.group3.accounttrade.util.IdEncoder;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +38,7 @@ public class PaymentController {
 
     private final VnpayPaymentService vnpayPaymentService;
     private final OrderRepository orderRepository;
+    private final IdEncoder idEncoder;
 
     /**
      * Handles VNPAY IPN (Instant Payment Notification) callback.
@@ -89,9 +91,8 @@ public class PaymentController {
 
         if (result.isTopUp()) {
             if (result.isSuccess() && result.getPendingPostId() != null) {
-                ModelAndView mav = new ModelAndView("redirect:/buyer/checkout");
-                mav.addObject("postId", result.getPendingPostId());
-                return new ModelAndView("redirect:/buyer/checkout?postId=" + result.getPendingPostId() + "&topupSuccess=true");
+                String encodedPostId = idEncoder.encodePostId(result.getPendingPostId());
+                return new ModelAndView("redirect:/buyer/checkout?postId=" + encodedPostId + "&topupSuccess=true");
             }
             ModelAndView mav = new ModelAndView("redirect:/buyer/wallet");
             if (result.isSuccess()) {
@@ -119,10 +120,19 @@ public class PaymentController {
      * @return ModelAndView showing payment status
      */
     @GetMapping("/status/{orderId}")
-    public ModelAndView getPaymentStatus(@PathVariable Long orderId) {
+    public ModelAndView getPaymentStatus(@PathVariable String orderId) {
+        Long decodedOrderId;
+        try {
+            decodedOrderId = idEncoder.decodeOrderId(orderId);
+        } catch (IllegalArgumentException e) {
+            return new ModelAndView("redirect:/buyer/purchases");
+        }
+        PaymentOrderSummary orderSummary = buildOrderSummary(decodedOrderId);
         ModelAndView mav = new ModelAndView("payment_status");
-        mav.addObject("orderId", orderId);
-        // Additional status information can be added here
+        mav.addObject("orderId", decodedOrderId);
+        mav.addObject("encodedOrderId", idEncoder.encodeOrderId(decodedOrderId));
+        mav.addObject("orderSummary", orderSummary);
+        mav.addObject("statusContent", resolveStatusContent(orderSummary));
         return mav;
     }
 
@@ -190,6 +200,9 @@ public class PaymentController {
         if ("AWAITING_PAYMENT".equalsIgnoreCase(statusName)) {
             return "Trang thai thanh toan dang duoc dong bo. Vui long doi them vai giay roi mo lai trang thai don hang neu credentials chua hien ra.";
         }
+        if ("PAYMENT_EXPIRED".equalsIgnoreCase(statusName)) {
+            return "Don hang da het han thanh toan. Credential giu cho da duoc hoan lai kho, vui long quay lai marketplace de checkout lai neu van muon mua.";
+        }
         if ("PAYMENT_FAILED".equalsIgnoreCase(statusName)) {
             return "Don hang chua duoc thanh toan thanh cong. Ban co the quay lai marketplace hoac thu thanh toan lai tu lich su mua hang.";
         }
@@ -201,7 +214,33 @@ public class PaymentController {
         if ("AWAITING_BUYER_CONFIRMATION".equalsIgnoreCase(statusName)) {
             return "Neu credentials khong dung nhu mo ta, hay mo don hang va tao khieu nai ngay trong lich su mua hang de TrustBridge giu escrow va ho tro ban.";
         }
+        if ("PAYMENT_EXPIRED".equalsIgnoreCase(statusName)) {
+            return "Lien ket thanh toan cu da het han. Hay quay lai marketplace va tao don moi neu ban van muon mua san pham nay.";
+        }
         return "Can ho tro? Hay kiem tra trang thai don hang trong Lich su mua hang hoac lien he doi ngu TrustBridge neu can xac minh them ve payment.";
+    }
+
+    private PaymentStatusContent resolveStatusContent(PaymentOrderSummary orderSummary) {
+        String statusName = orderSummary != null ? orderSummary.orderStatus() : null;
+        if ("PAYMENT_EXPIRED".equalsIgnoreCase(statusName)) {
+            return new PaymentStatusContent(
+                    "Thanh toán đã hết hạn",
+                    "Đơn hàng này đã vượt quá thời gian chờ thanh toán từ VNPAY.",
+                    "Credential đã giữ chỗ đã được hoàn lại kho. Nếu bạn vẫn muốn mua, hãy quay lại marketplace và checkout lại để tạo đơn mới.",
+                    "expired");
+        }
+        if ("PAYMENT_FAILED".equalsIgnoreCase(statusName)) {
+            return new PaymentStatusContent(
+                    "Thanh toán chưa thành công",
+                    "VNPAY đã trả về trạng thái thanh toán thất bại cho đơn hàng này.",
+                    "Bạn có thể quay lại marketplace để thử thanh toán lại bằng một đơn mới.",
+                    "failed");
+        }
+        return new PaymentStatusContent(
+                "Đơn hàng đang được đối soát",
+                "Đơn hàng đang chờ hệ thống đồng bộ trạng thái từ VNPAY và workflow escrow.",
+                "Sau khi IPN xác nhận thành công, TrustBridge sẽ tiếp tục gán credential đã giữ chỗ và chuyển đơn sang bước chờ buyer xác nhận.",
+                "pending");
     }
 
     public record PaymentOrderSummary(
@@ -219,4 +258,10 @@ public class PaymentController {
             String productTitle,
             BigDecimal unitPrice,
             String itemStatus) {}
+
+    public record PaymentStatusContent(
+            String title,
+            String description,
+            String helper,
+            String tone) {}
 }

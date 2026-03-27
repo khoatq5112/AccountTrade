@@ -6,6 +6,7 @@ import com.group3.accounttrade.entity.User;
 import com.group3.accounttrade.repository.UserRepository;
 import com.group3.accounttrade.service.CategoryService;
 import com.group3.accounttrade.service.PostService;
+import com.group3.accounttrade.util.IdEncoder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -32,6 +33,7 @@ public class MarketplaceController {
     private final CategoryService categoryService;
     private final PostService postService;
     private final UserRepository userRepository;
+    private final IdEncoder idEncoder;
 
     @GetMapping("/marketplace")
     public String marketplace(
@@ -117,8 +119,15 @@ public class MarketplaceController {
     }
 
     @GetMapping("/marketplace/{postId}")
-    public String marketplaceDetail(@PathVariable Integer postId, Model model) {
-        Post post = categoryService.getPostById(postId);
+    public String marketplaceDetail(@PathVariable String postId, Model model) {
+        Integer decodedPostId;
+        try {
+            decodedPostId = idEncoder.decodePostId(postId);
+        } catch (IllegalArgumentException e) {
+            return "redirect:/marketplace?error=not_found";
+        }
+
+        Post post = categoryService.getPostById(decodedPostId);
         if (post == null) {
             return "redirect:/marketplace?error=not_found";
         }
@@ -142,7 +151,7 @@ public class MarketplaceController {
         return posts.stream()
                 .limit(5)
                 .map(post -> new SearchSuggestion(
-                        post.getPostId(),
+                        idEncoder.encodePostId(post.getPostId()),
                         post.getTitle(),
                         post.getResolvedThumbnailUrl(),
                         post.getPrice() != null ? post.getPrice().doubleValue() : 0))
@@ -150,7 +159,7 @@ public class MarketplaceController {
     }
 
     // Simple record for search suggestions
-    public record SearchSuggestion(Integer id, String title, String thumbnailUrl, Double price) {}
+    public record SearchSuggestion(String id, String title, String thumbnailUrl, Double price) {}
 
     private boolean isAuthenticated() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();

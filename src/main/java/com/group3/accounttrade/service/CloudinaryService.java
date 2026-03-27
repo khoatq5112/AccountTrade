@@ -3,6 +3,7 @@ package com.group3.accounttrade.service;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -14,6 +15,7 @@ import java.util.Map;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CloudinaryService {
 
     private final Cloudinary cloudinary;
@@ -36,13 +38,26 @@ public class CloudinaryService {
             throw new IllegalArgumentException("Chỉ chấp nhận file hình ảnh");
         }
 
-        // Upload to Cloudinary in the "account-trade/posts" folder
-        Map<?, ?> uploadResult = cloudinary.uploader().upload(
-                file.getBytes(),
-                ObjectUtils.asMap("folder", "account-trade/posts")
-        );
+        try {
+            Map<?, ?> uploadResult = cloudinary.uploader().upload(
+                    file.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder", "account-trade/posts",
+                            "resource_type", "image",
+                            "use_filename", false,
+                            "unique_filename", true,
+                            "overwrite", false
+                    )
+            );
 
-        return uploadResult.get("secure_url").toString();
+            return uploadResult.get("secure_url").toString();
+        } catch (IOException e) {
+            log.error("Cloudinary upload failed for file {}", file.getOriginalFilename(), e);
+            throw e;
+        } catch (Exception e) {
+            log.error("Unexpected Cloudinary upload failure for file {}", file.getOriginalFilename(), e);
+            throw new IOException("Cloudinary upload failed: " + e.getMessage(), e);
+        }
     }
 
     /**

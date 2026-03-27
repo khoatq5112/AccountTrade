@@ -4,6 +4,7 @@ import com.group3.accounttrade.dto.DisputeDetailDTO;
 import com.group3.accounttrade.dto.DisputeMessageDTO;
 import com.group3.accounttrade.entity.Dispute;
 import com.group3.accounttrade.entity.Order;
+import com.group3.accounttrade.entity.OrderStatus;
 import com.group3.accounttrade.entity.Post;
 import com.group3.accounttrade.entity.User;
 import com.group3.accounttrade.entity.Wallet;
@@ -18,6 +19,7 @@ import com.group3.accounttrade.service.CloudinaryService;
 import com.group3.accounttrade.service.DisputeService;
 import com.group3.accounttrade.service.OrderCheckoutService;
 import com.group3.accounttrade.service.WalletService;
+import com.group3.accounttrade.util.IdEncoder;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +41,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Controller
@@ -56,6 +59,7 @@ public class BuyerController {
     private final DisputeService disputeService;
     private final CloudinaryService cloudinaryService;
     private final WalletService walletService;
+    private final IdEncoder idEncoder;
 
     @GetMapping("/dashboard")
     public String viewBuyerDashboard(Model model) {
@@ -119,19 +123,27 @@ public class BuyerController {
     }
 
     @GetMapping("/checkout")
-    public String checkout(@RequestParam Integer postId,
+    public String checkout(@RequestParam String postId,
                            @RequestParam(required = false) Boolean topupSuccess,
                            Model model) {
+        Integer decodedPostId;
+        try {
+            decodedPostId = idEncoder.decodePostId(postId);
+        } catch (IllegalArgumentException e) {
+            return "redirect:/marketplace?error=not_found";
+        }
+
+        String encodedPostId = idEncoder.encodePostId(decodedPostId);
         User user = getCurrentUser();
         if (user == null) {
-            return "redirect:/login.html?redirect=/buyer/checkout?postId=" + postId;
+            return "redirect:/login.html?redirect=/buyer/checkout?postId=" + encodedPostId;
         }
         if (isSellerAccount(user)) {
-            return "redirect:/marketplace/" + postId + "?error=seller_restricted";
+            return "redirect:/marketplace/" + encodedPostId + "?error=seller_restricted";
         }
 
         try {
-            OrderCheckoutService.WalletCheckoutPreview preview = orderCheckoutService.previewWalletCheckout(user, postId);
+            OrderCheckoutService.WalletCheckoutPreview preview = orderCheckoutService.previewWalletCheckout(user, decodedPostId);
             model.addAttribute("post", preview.post());
             model.addAttribute("walletBalance", preview.walletBalance());
             model.addAttribute("walletDeficit", preview.deficitAmount());
@@ -140,11 +152,11 @@ public class BuyerController {
             model.addAttribute("minimumTopUpAmount", walletService.getMinimumTopUpAmount());
         } catch (IllegalArgumentException e) {
             if ("You cannot purchase your own post".equals(e.getMessage())) {
-                return "redirect:/marketplace/" + postId + "?error=own_post";
+                return "redirect:/marketplace/" + encodedPostId + "?error=own_post";
             }
             return "redirect:/marketplace?error=not_found";
         } catch (IllegalStateException e) {
-            return "redirect:/marketplace/" + postId + "?error=unavailable";
+            return "redirect:/marketplace/" + encodedPostId + "?error=unavailable";
         }
 
         model.addAttribute("user", user);
@@ -178,78 +190,96 @@ public class BuyerController {
     }
 
     @PostMapping("/checkout")
-    public String processCheckout(@RequestParam Integer postId,
+    public String processCheckout(@RequestParam String postId,
                                   @RequestParam(defaultValue = "VNPAY") String paymentMethod,
                                   HttpServletRequest request,
                                   RedirectAttributes redirectAttributes) {
+        Integer decodedPostId;
+        try {
+            decodedPostId = idEncoder.decodePostId(postId);
+        } catch (IllegalArgumentException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Sản phẩm không hợp lệ.");
+            return "redirect:/marketplace?error=not_found";
+        }
+
+        String encodedPostId = idEncoder.encodePostId(decodedPostId);
         User user = getCurrentUser();
         if (user == null) {
-            return "redirect:/login.html?redirect=/buyer/checkout?postId=" + postId;
+            return "redirect:/login.html?redirect=/buyer/checkout?postId=" + encodedPostId;
         }
         if (isSellerAccount(user)) {
             redirectAttributes.addFlashAttribute("errorMessage", "Tài khoản seller không thể mua sản phẩm.");
-            return "redirect:/marketplace/" + postId;
+            return "redirect:/marketplace/" + encodedPostId;
         }
 
         if ("WALLET".equalsIgnoreCase(paymentMethod)) {
             try {
-                Order order = orderCheckoutService.initiateWalletCheckout(user, postId);
+                Order order = orderCheckoutService.initiateWalletCheckout(user, decodedPostId);
                 redirectAttributes.addFlashAttribute("successMessage",
                         "Thanh toán bằng ví thành công! Credential đã được giao cho đơn hàng của bạn.");
                 return "redirect:/buyer/purchases?orderId=" + order.getOrderId();
             } catch (WalletService.InsufficientBalanceException e) {
                 log.warn("[CHECKOUT] Wallet balance insufficient for user {} on post {}: {}",
-                        user.getUsername(), postId, e.getMessage());
+                        user.getUsername(), decodedPostId, e.getMessage());
                 redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
-                return "redirect:/buyer/checkout?postId=" + postId;
+                return "redirect:/buyer/checkout?postId=" + encodedPostId;
             } catch (IllegalArgumentException | IllegalStateException e) {
                 log.error("[CHECKOUT] Wallet checkout failed validation for user {} (id={}) on post {}",
-                        user.getUsername(), user.getUserId(), postId, e);
+                        user.getUsername(), user.getUserId(), decodedPostId, e);
                 redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
-                return "redirect:/marketplace/" + postId;
+                return "redirect:/marketplace/" + encodedPostId;
             } catch (Exception e) {
                 log.error("[CHECKOUT] Unexpected wallet checkout failure for user {} (id={}) on post {}",
-                        user.getUsername(), user.getUserId(), postId, e);
+                        user.getUsername(), user.getUserId(), decodedPostId, e);
                 redirectAttributes.addFlashAttribute("errorMessage", "Thanh toán bằng ví thất bại. Vui lòng thử lại.");
-                return "redirect:/buyer/checkout?postId=" + postId;
+                return "redirect:/buyer/checkout?postId=" + encodedPostId;
             }
         }
 
         try {
             OrderCheckoutService.CheckoutSession checkoutSession = orderCheckoutService
-                    .initiateCheckout(user, postId, request);
+                    .initiateCheckout(user, decodedPostId, request);
             redirectAttributes.addFlashAttribute("successMessage",
                     "Đơn hàng đã được tạo. Hoàn tất thanh toán để TrustBridge chuyển giao credential theo quy trình escrow.");
             return "redirect:" + checkoutSession.paymentUrl();
         } catch (IllegalArgumentException e) {
             redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
-            return "redirect:/marketplace/" + postId;
+            return "redirect:/marketplace/" + encodedPostId;
         } catch (IllegalStateException e) {
             String message = e.getMessage();
             if ("VNPAY is not properly configured".equals(message)) {
                 message = "VNPAY sandbox is not configured correctly. Check the VNPAY properties or environment variables before retrying checkout.";
             }
             redirectAttributes.addFlashAttribute("errorMessage", message);
-            return "redirect:/marketplace/" + postId;
+            return "redirect:/marketplace/" + encodedPostId;
         } catch (Exception e) {
             redirectAttributes.addFlashAttribute("errorMessage",
                     "Không thể khởi tạo phiên thanh toán cho sản phẩm này.");
-            return "redirect:/marketplace/" + postId;
+            return "redirect:/marketplace/" + encodedPostId;
         }
     }
 
     @PostMapping("/wallet/topup")
     public String initiateTopUp(@RequestParam BigDecimal amount,
                                  @RequestParam(required = false) BigDecimal requiredAmount,
-                                 @RequestParam(required = false) Integer pendingPostId,
+                                 @RequestParam(required = false) String pendingPostId,
                                  HttpServletRequest request,
                                  RedirectAttributes redirectAttributes) {
         User user = getCurrentUser();
         if (user == null) {
             return "redirect:/login.html";
         }
+        Integer decodedPendingPostId = null;
+        if (pendingPostId != null && !pendingPostId.isBlank()) {
+            try {
+                decodedPendingPostId = idEncoder.decodePostId(pendingPostId);
+            } catch (IllegalArgumentException e) {
+                redirectAttributes.addFlashAttribute("errorMessage", "Sản phẩm chờ thanh toán không hợp lệ.");
+                return "redirect:/buyer/wallet";
+            }
+        }
         try {
-            String paymentUrl = walletService.initiateTopUp(user, amount, requiredAmount, pendingPostId, request);
+            String paymentUrl = walletService.initiateTopUp(user, amount, requiredAmount, decodedPendingPostId, request);
             return "redirect:" + paymentUrl;
         } catch (IllegalArgumentException e) {
             redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
@@ -291,10 +321,12 @@ public class BuyerController {
         BigDecimal walletBalance = wallet != null ? wallet.getBalance() : BigDecimal.ZERO;
         model.addAttribute("walletBalance", walletBalance);
 
-        List<Order> workflowOrders;
-        workflowOrders = orderRepository.findByBuyer(user).stream()
+        List<Order> allOrders = orderRepository.findByBuyer(user).stream()
                 .sorted((left, right) -> right.getCreatedAt().compareTo(left.getCreatedAt()))
                 .toList();
+        List<Order> workflowOrders = allOrders.stream()
+                .filter(order -> shouldDisplayInPurchases(order, orderId))
+                .collect(Collectors.toList());
         
         model.addAttribute("workflowOrders", workflowOrders);
         model.addAttribute("highlightOrderId", orderId);
@@ -550,10 +582,21 @@ public class BuyerController {
                 && "Seller".equalsIgnoreCase(user.getRole().getRoleName());
     }
 
-    private String resolveTopUpRedirect(Integer pendingPostId) {
+    private String resolveTopUpRedirect(String pendingPostId) {
         if (pendingPostId != null) {
             return "redirect:/buyer/checkout?postId=" + pendingPostId;
         }
         return "redirect:/buyer/wallet";
+    }
+
+    private boolean shouldDisplayInPurchases(Order order, Long highlightedOrderId) {
+        if (order == null) {
+            return false;
+        }
+        if (highlightedOrderId != null && highlightedOrderId.equals(order.getOrderId())) {
+            return true;
+        }
+        return order.getOrderStatus() == null
+                || !OrderStatus.PAYMENT_EXPIRED.equalsIgnoreCase(order.getOrderStatus().getStatusName());
     }
 }

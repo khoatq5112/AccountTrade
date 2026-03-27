@@ -285,7 +285,7 @@
                                     </td>
                                     <td class="py-5">
                                         <div class="flex flex-col items-start gap-2">
-                                            <a th:if="${row.postId != null}" th:href="@{/marketplace/{id}(id=${row.postId})}" target="_blank"
+                                            <a th:if="${row.postId != null}" th:href="@{/marketplace/{id}(id=${@idEncoder.encodePostId(row.postId)})}" target="_blank"
                                                class="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white hover:bg-blue-700">
                                                 <i class="ph ph-arrow-square-out"></i> Xem bài đăng
                                             </a>

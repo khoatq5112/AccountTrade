@@ -55,7 +55,7 @@ public class PostService {
         }
 
         // Determine initial stock status based on credentials
-        boolean hasCredentials = form.getCredentials() != null && !form.getCredentials().isEmpty();
+        boolean hasCredentials = form.hasCredentials();
         StockStatus stockStatus = hasCredentials ? StockStatus.IN_STOCK : StockStatus.OUT_OF_STOCK;
 
         // Create the post entity
@@ -104,7 +104,9 @@ public class PostService {
      * @return a page of posts
      */
     public Page<Post> getSellerPosts(String username, Pageable pageable) {
-        return postRepository.findBySeller_UsernameOrderByCreatedAtDesc(username, pageable);
+        Page<Post> page = postRepository.findBySeller_UsernameOrderByCreatedAtDesc(username, pageable);
+        synchronizePostStockStatuses(page.getContent());
+        return page;
     }
 
     /**
@@ -119,7 +121,9 @@ public class PostService {
      */
     public Page<Post> getSellerPostsWithFilters(String username, String keyword, Integer categoryId,
                                                  StockStatus stockStatus, Pageable pageable) {
-        return postRepository.findSellerPostsWithFilters(username, keyword, categoryId, stockStatus, pageable);
+        Page<Post> page = postRepository.findSellerPostsWithFilters(username, keyword, categoryId, stockStatus, pageable);
+        synchronizePostStockStatuses(page.getContent());
+        return page;
     }
 
     /**
@@ -131,8 +135,10 @@ public class PostService {
      * @throws IllegalArgumentException if post not found or doesn't belong to seller
      */
     public Post getPostByIdAndSeller(Integer postId, String username) {
-        return postRepository.findByPostIdAndSeller_Username(postId, username)
+        Post post = postRepository.findByPostIdAndSeller_Username(postId, username)
                 .orElseThrow(() -> new IllegalArgumentException("Bài đăng không tồn tại hoặc bạn không có quyền truy cập"));
+        synchronizePostStockStatus(post);
+        return post;
     }
 
     /**
@@ -143,8 +149,10 @@ public class PostService {
      * @throws IllegalArgumentException if post not found
      */
     public Post getPostById(Integer postId) {
-        return postRepository.findById(postId)
+        Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new IllegalArgumentException("Bài đăng không tồn tại"));
+        synchronizePostStockStatus(post);
+        return post;
     }
 
     /**
@@ -412,17 +420,51 @@ public class PostService {
         
         CredentialStatus availableStatus = credentialStatusRepository.findByStatusName(CredentialStatus.AVAILABLE)
                 .orElse(null);
+        CredentialStatus holdingStatus = credentialStatusRepository.findByStatusName(CredentialStatus.HOLDING)
+                .orElse(null);
         CredentialStatus soldStatus = credentialStatusRepository.findByStatusName(CredentialStatus.SOLD)
                 .orElse(null);
         
         long available = availableStatus != null 
                 ? postCredentialRepository.countByPost_PostIdAndCredentialStatus(postId, availableStatus) 
                 : 0;
-        long sold = soldStatus != null 
-                ? postCredentialRepository.countByPost_PostIdAndCredentialStatus(postId, soldStatus) 
+        long holding = holdingStatus != null
+                ? postCredentialRepository.countByPost_PostIdAndCredentialStatus(postId, holdingStatus)
                 : 0;
+        long sold = (soldStatus != null
+                ? postCredentialRepository.countByPost_PostIdAndCredentialStatus(postId, soldStatus) 
+                : 0) + holding;
 
         return new CredentialStats(total, available, sold);
+    }
+
+    @Transactional
+    protected void synchronizePostStockStatuses(List<Post> posts) {
+        if (posts == null || posts.isEmpty()) {
+            return;
+        }
+        for (Post post : posts) {
+            synchronizePostStockStatus(post);
+        }
+    }
+
+    @Transactional
+    protected void synchronizePostStockStatus(Post post) {
+        if (post == null || post.getPostId() == null) {
+            return;
+        }
+
+        CredentialStatus availableStatus = credentialStatusRepository.findByStatusName(CredentialStatus.AVAILABLE)
+                .orElse(null);
+
+        boolean hasAvailable = availableStatus != null
+                && postCredentialRepository.existsByPost_PostIdAndCredentialStatus(post.getPostId(), availableStatus);
+        StockStatus actualStatus = hasAvailable ? StockStatus.IN_STOCK : StockStatus.OUT_OF_STOCK;
+
+        if (post.getStockStatus() != actualStatus) {
+            post.setStockStatus(actualStatus);
+            postRepository.save(post);
+        }
     }
 
     /**

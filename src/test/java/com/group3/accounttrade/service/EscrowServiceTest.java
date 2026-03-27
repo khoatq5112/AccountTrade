@@ -7,12 +7,13 @@ import com.group3.accounttrade.entity.EscrowStatus;
 import com.group3.accounttrade.entity.EscrowTransaction;
 import com.group3.accounttrade.entity.Order;
 import com.group3.accounttrade.entity.OrderItem;
+import com.group3.accounttrade.entity.OrderStatus;
 import com.group3.accounttrade.entity.Post;
+import com.group3.accounttrade.service.notification.NotificationService;
 import com.group3.accounttrade.repository.AuditLogRepository;
 import com.group3.accounttrade.repository.EscrowRepository;
 import com.group3.accounttrade.repository.EscrowStatusRepository;
 import com.group3.accounttrade.repository.EscrowTransactionRepository;
-import com.group3.accounttrade.repository.NotificationRepository;
 import com.group3.accounttrade.repository.OrderRepository;
 import com.group3.accounttrade.repository.OrderStatusRepository;
 import com.group3.accounttrade.repository.UserRepository;
@@ -25,12 +26,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -56,7 +59,7 @@ class EscrowServiceTest {
     private AuditLogRepository auditLogRepository;
 
     @Mock
-    private NotificationRepository notificationRepository;
+    private NotificationService notificationService;
 
     @Mock
     private UserRepository userRepository;
@@ -113,5 +116,31 @@ class EscrowServiceTest {
         verify(escrowTransactionRepository).save(transactionCaptor.capture());
         assertSame(persistedEscrow, transactionCaptor.getValue().getEscrow());
         assertEquals(EscrowTransaction.TYPE_CREATED, transactionCaptor.getValue().getTransactionType());
+    }
+
+    @Test
+    void autoReleaseEscrowsAtReleasesExpiredHoldingEscrows() {
+        LocalDateTime now = LocalDateTime.of(2026, 3, 27, 12, 0);
+        Order order = Order.builder()
+                .orderId(55L)
+                .orderNumber("ORD-55")
+                .orderStatus(OrderStatus.builder().statusName(OrderStatus.AWAITING_BUYER_CONFIRMATION).build())
+                .orderItems(List.of(OrderItem.builder().build()))
+                .build();
+        Escrow escrow = Escrow.builder()
+                .escrowId(88L)
+                .order(order)
+                .escrowStatus(EscrowStatus.builder().statusName(EscrowService.STATUS_HOLDING).build())
+                .autoReleaseDeadline(now.minusMinutes(1))
+                .build();
+
+        when(escrowRepository.findExpiredEscrows(EscrowService.STATUS_HOLDING, now)).thenReturn(List.of(escrow));
+        EscrowService spyService = org.mockito.Mockito.spy(escrowService);
+        org.mockito.Mockito.doReturn(escrow).when(spyService)
+                .releaseEscrow(eq(55L), eq("Auto-release after buyer verification timeout"), eq(null));
+
+        spyService.autoReleaseEscrowsAt(now, false);
+
+        verify(spyService).releaseEscrow(55L, "Auto-release after buyer verification timeout", null);
     }
 }

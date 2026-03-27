@@ -314,7 +314,7 @@
                                     <p class="mt-2 text-sm text-slate-500" th:text="${post.category != null ? post.category.categoryName : 'Thế giới AI'}">Category</p>
                                     <div class="mt-5 flex items-center justify-between">
                                         <span class="text-xl font-extrabold text-primary" th:text="${#numbers.formatDecimal(post.price, 0, 'COMMA', 0, 'POINT') + ' ₫'}">0 ₫</span>
-                                        <a th:href="@{/marketplace/{postId}(postId=${post.postId})}" class="rounded-full border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:border-primary hover:text-primary">Xem</a>
+                                        <a th:href="@{/marketplace/{postId}(postId=${@idEncoder.encodePostId(post.postId)})}" class="rounded-full border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:border-primary hover:text-primary">Xem</a>
                                     </div>
                                 </div>
                             </div>
@@ -335,7 +335,7 @@
                         </div>
                         <div class="space-y-4">
                             <th:block th:each="post : ${googleDrivePosts}">
-                                <a th:href="@{/marketplace/{postId}(postId=${post.postId})}" class="flex items-center gap-4 rounded-[1.5rem] border border-slate-200 p-4 hover-rise">
+                                <a th:href="@{/marketplace/{postId}(postId=${@idEncoder.encodePostId(post.postId)})}" class="flex items-center gap-4 rounded-[1.5rem] border border-slate-200 p-4 hover-rise">
                                     <div class="flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-[1.25rem] bg-blue-50">
                                         <img th:src="${post.resolvedThumbnailUrl}" class="h-full w-full object-contain" th:alt="${post.title}">
                                     </div>
@@ -364,7 +364,7 @@
                         </div>
                         <div class="space-y-4">
                             <th:block th:each="post : ${vpnPosts}">
-                                <a th:href="@{/marketplace/{postId}(postId=${post.postId})}" class="flex items-center gap-4 rounded-[1.5rem] border border-slate-200 p-4 hover-rise">
+                                <a th:href="@{/marketplace/{postId}(postId=${@idEncoder.encodePostId(post.postId)})}" class="flex items-center gap-4 rounded-[1.5rem] border border-slate-200 p-4 hover-rise">
                                     <div class="flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-[1.25rem] bg-green-50">
                                         <img th:src="${post.resolvedThumbnailUrl}" class="h-full w-full object-contain" th:alt="${post.title}">
                                     </div>

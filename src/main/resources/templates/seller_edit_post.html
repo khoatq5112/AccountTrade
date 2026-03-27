@@ -174,7 +174,7 @@
                     <p class="text-gray-500 mt-2">Cập nhật thông tin bài đăng #<span th:text="${post.postId}">1</span></p>
                 </div>
                 <div class="flex items-center gap-2">
-                    <a th:href="@{/marketplace/{id}(id=${post.postId})}" target="_blank"
+                    <a th:href="@{/marketplace/{id}(id=${@idEncoder.encodePostId(post.postId)})}" target="_blank"
                        class="btn-outline flex items-center gap-2">
                         <i class="ph ph-eye"></i> Xem bài đăng
                     </a>
@@ -209,7 +209,7 @@
         </div>
 
         <!-- Edit Post Form -->
-        <form th:action="@{/seller/posts/{id}(id=${post.postId})}" th:object="${postForm}" method="POST" enctype="multipart/form-data"
+        <form id="editPostForm" th:action="@{/seller/posts/{id}(id=${@idEncoder.encodePostId(post.postId)})}" th:object="${postForm}" method="POST" enctype="multipart/form-data"
               class="space-y-6">
             
             <!-- Title -->
@@ -240,10 +240,11 @@
             <div class="card">
                 <label class="form-label">
                     <i class="ph ph-text-align-left text-primary mr-1"></i>
-                    Mô tả chi tiết
+                    Mô tả chi tiết <span class="text-error">*</span>
                 </label>
                 <div id="editor-container"></div>
                 <input type="hidden" name="description" id="description" th:value="*{description}">
+                <p th:if="${#fields.hasErrors('description')}" th:errors="*{description}" class="form-error"></p>
             </div>
 
             <!-- Current Thumbnail Preview -->
@@ -286,6 +287,7 @@
                         </button>
                     </div>
                 </div>
+                <p th:if="${#fields.hasErrors('thumbnailFile')}" th:errors="*{thumbnailFile}" class="form-error mt-2"></p>
             </div>
 
             <!-- Category Selection -->
@@ -312,7 +314,7 @@
                         <i class="ph ph-package text-primary text-xl"></i>
                         <h3 class="font-bold text-gray-900">Kho hàng & Tài khoản</h3>
                     </div>
-                    <a th:href="@{/seller/posts/{id}/credentials(id=${post.postId})}"
+                    <a th:href="@{/seller/posts/{id}/credentials(id=${@idEncoder.encodePostId(post.postId)})}"
                        class="btn-primary flex items-center gap-2">
                         <i class="ph ph-gear"></i> Quản lý tài khoản
                     </a>
@@ -343,7 +345,7 @@
                     </div>
                     <div class="text-center p-4 bg-red-50 rounded-lg border border-red-200">
                         <div class="text-3xl font-bold text-error" th:text="${credentialStats.sold}">0</div>
-                        <div class="text-xs text-gray-500 mt-1">Đã bán</div>
+                        <div class="text-xs text-gray-500 mt-1">Đã bán / Giữ chỗ</div>
                     </div>
                 </div>
                 
@@ -364,7 +366,7 @@
                             <i class="ph ph-question mr-2"></i> Chưa xác định
                         </span>
                     </div>
-                    <a th:href="@{/seller/posts/{id}/credentials(id=${post.postId})}"
+                    <a th:href="@{/seller/posts/{id}/credentials(id=${@idEncoder.encodePostId(post.postId)})}"
                        class="text-primary hover:underline text-sm font-medium">
                         <i class="ph ph-plus-circle mr-1"></i> Thêm tài khoản
                     </a>
@@ -386,7 +388,7 @@
                         <a th:href="@{/seller/posts}" class="btn-outline">
                             <i class="ph ph-arrow-left mr-2"></i> Quay lại
                         </a>
-                        <form th:action="@{/seller/posts/{id}/delete(id=${post.postId})}" method="POST"
+                        <form th:action="@{/seller/posts/{id}/delete(id=${@idEncoder.encodePostId(post.postId)})}" method="POST"
                               class="inline" onsubmit="return confirm('Bạn có chắc muốn xóa bài đăng này? Hành động này không thể hoàn tác.');">
                             <button type="submit" class="btn-danger">
                                 <i class="ph ph-trash mr-2"></i> Xóa bài đăng
@@ -433,15 +435,118 @@
             placeholder: 'Nhập mô tả chi tiết về sản phẩm của bạn...'
         });
 
+        quill.getModule('toolbar').addHandler('image', selectAndInsertEditorImages);
+
         // Set initial content from existing post
         var existingDescription = document.getElementById('description').value;
         if (existingDescription) {
             quill.root.innerHTML = existingDescription;
         }
 
-        // Sync Quill content to hidden input before form submit
-        document.querySelector('form').addEventListener('submit', function() {
+        function syncDescriptionField() {
             document.getElementById('description').value = quill.root.innerHTML;
+        }
+
+        async function compressEditorImage(file) {
+            if (!file || !file.type.startsWith('image/')) {
+                return file;
+            }
+
+            if (file.size <= 1.5 * 1024 * 1024) {
+                return file;
+            }
+
+            const imageUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+
+            const image = await new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = imageUrl;
+            });
+
+            const maxDimension = 1600;
+            const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(image.width * scale));
+            canvas.height = Math.max(1, Math.round(image.height * scale));
+
+            const context = canvas.getContext('2d');
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+            const blob = await new Promise((resolve) => {
+                canvas.toBlob(resolve, 'image/jpeg', 0.82);
+            });
+
+            if (!blob || blob.size >= file.size) {
+                return file;
+            }
+
+            return new File([blob], file.name.replace(/\.\w+$/, '.jpg'), {
+                type: 'image/jpeg',
+                lastModified: Date.now()
+            });
+        }
+
+        async function selectAndInsertEditorImages() {
+            const picker = document.createElement('input');
+            picker.type = 'file';
+            picker.accept = 'image/*';
+            picker.click();
+
+            picker.addEventListener('change', async () => {
+                const file = picker.files && picker.files[0];
+                if (!file) {
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('images', await compressEditorImage(file));
+
+                try {
+                    const previousPlaceholder = quill.root.dataset.placeholder;
+                    quill.root.dataset.placeholder = 'Đang tải ảnh lên...';
+
+                    const response = await fetch('/api/uploads/editor-images', {
+                        method: 'POST',
+                        body: formData,
+                        credentials: 'same-origin'
+                    });
+                    const payload = await response.json();
+                    if (!response.ok) {
+                        throw new Error(payload.message || 'Upload failed');
+                    }
+
+                    let range = quill.getSelection(true);
+                    let insertIndex = range ? range.index : quill.getLength();
+                    const imageUrl = Array.isArray(payload.urls) ? payload.urls[0] : null;
+                    if (!imageUrl) {
+                        throw new Error('Không nhận được URL ảnh từ máy chủ');
+                    }
+
+                    quill.insertEmbed(insertIndex, 'image', imageUrl, 'user');
+                    insertIndex += 1;
+                    quill.insertText(insertIndex, '\n', 'user');
+                    insertIndex += 1;
+
+                    quill.setSelection(insertIndex, 0, 'silent');
+                    syncDescriptionField();
+                    quill.root.dataset.placeholder = previousPlaceholder || 'Nhập mô tả chi tiết về sản phẩm của bạn...';
+                } catch (error) {
+                    quill.root.dataset.placeholder = 'Nhập mô tả chi tiết về sản phẩm của bạn...';
+                    alert(error.message || 'Không thể tải ảnh lên.');
+                }
+            }, { once: true });
+        }
+
+        // Sync Quill content to hidden input before form submit
+        document.getElementById('editPostForm').addEventListener('submit', function() {
+            syncDescriptionField();
         });
 
         // User menu toggle

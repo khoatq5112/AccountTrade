@@ -289,7 +289,7 @@
                                     </td>
                                     <!-- Title -->
                                     <td class="py-4 px-4">
-                                        <a th:href="@{/marketplace/{id}(id=${post.postId})}" target="_blank"
+                                        <a th:href="@{/marketplace/{id}(id=${@idEncoder.encodePostId(post.postId)})}" target="_blank"
                                             class="font-bold text-gray-900 hover:text-primary transition-colors line-clamp-2">
                                             <span th:text="${post.title}">Post Title</span>
                                         </a>
@@ -324,19 +324,19 @@
                                     <td class="py-4 px-4 text-right">
                                         <div class="flex items-center justify-end gap-2">
                                             <!-- View -->
-                                            <a th:href="@{/marketplace/{id}(id=${post.postId})}" target="_blank"
+                                            <a th:href="@{/marketplace/{id}(id=${@idEncoder.encodePostId(post.postId)})}" target="_blank"
                                                 class="p-2 text-gray-500 hover:text-primary hover:bg-blue-50 rounded-lg transition-colors"
                                                 title="Xem bài đăng">
                                                 <i class="ph-bold ph-eye text-lg"></i>
                                             </a>
                                             <!-- Edit -->
-                                            <a th:href="@{/seller/posts/{id}/edit(id=${post.postId})}"
+                                            <a th:href="@{/seller/posts/{id}/edit(id=${@idEncoder.encodePostId(post.postId)})}"
                                                 class="p-2 text-gray-500 hover:text-primary hover:bg-blue-50 rounded-lg transition-colors"
                                                 title="Chỉnh sửa">
                                                 <i class="ph-bold ph-pencil-simple text-lg"></i>
                                             </a>
                                             <!-- Delete -->
-                                            <form th:action="@{/seller/posts/{id}/delete(id=${post.postId})}" method="POST"
+                                            <form th:action="@{/seller/posts/{id}/delete(id=${@idEncoder.encodePostId(post.postId)})}" method="POST"
                                                 class="inline" onsubmit="return confirm('Bạn có chắc muốn xóa bài đăng này?');">
                                                 <button type="submit"
                                                     class="p-2 text-gray-500 hover:text-error hover:bg-red-50 rounded-lg transition-colors"

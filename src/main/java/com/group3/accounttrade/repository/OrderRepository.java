@@ -47,6 +47,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT o FROM Order o WHERE o.confirmationDeadline < :now AND o.orderStatus.statusName = :statusName")
     List<Order> findExpiredConfirmationOrders(LocalDateTime now, String statusName);
 
+    @Query("SELECT DISTINCT o FROM Order o " +
+           "LEFT JOIN FETCH o.orderStatus " +
+           "LEFT JOIN FETCH o.buyer " +
+           "LEFT JOIN FETCH o.orderItems oi " +
+           "LEFT JOIN FETCH oi.assignedCredential " +
+           "LEFT JOIN FETCH oi.post " +
+           "LEFT JOIN FETCH oi.seller " +
+           "WHERE o.orderStatus.statusName = :statusName AND o.createdAt <= :cutoff")
+    List<Order> findExpiredAwaitingPaymentOrders(LocalDateTime cutoff, String statusName);
+
     @Query("SELECT COUNT(o) FROM Order o WHERE o.buyer = :buyer AND o.orderStatus.statusName IN :statusNames")
     long countByBuyerAndStatusIn(User buyer, List<String> statusNames);
 

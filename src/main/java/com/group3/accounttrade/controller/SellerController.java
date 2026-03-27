@@ -10,6 +10,7 @@ import com.group3.accounttrade.repository.WalletRepository;
 import com.group3.accounttrade.service.DisputeService;
 import com.group3.accounttrade.service.PostService;
 import com.group3.accounttrade.service.SellerDashboardService;
+import com.group3.accounttrade.util.IdEncoder;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -45,6 +47,7 @@ public class SellerController {
     private final DisputeService disputeService;
     private final UserRepository userRepository;
     private final WalletRepository walletRepository;
+    private final IdEncoder idEncoder;
 
     @GetMapping("/dashboard")
     public String viewSellerDashboard(Authentication authentication, Model model) {
@@ -137,9 +140,11 @@ public class SellerController {
             Model model,
             RedirectAttributes redirectAttributes) {
 
+        validatePostForm(postForm, bindingResult, true);
+
         // If validation errors exist, return to the form
         if (bindingResult.hasErrors()) {
-            addCategoriesToModel(model);
+            addCreateFormDependencies(model, authentication);
             return "seller_create_post";
         }
 
@@ -157,19 +162,19 @@ public class SellerController {
         } catch (IOException e) {
             // Handle image upload error
             model.addAttribute("errorMessage", "Lỗi tải lên hình ảnh: " + e.getMessage());
-            addCategoriesToModel(model);
+            addCreateFormDependencies(model, authentication);
             return "seller_create_post";
 
         } catch (IllegalArgumentException e) {
             // Handle validation errors from service
             model.addAttribute("errorMessage", e.getMessage());
-            addCategoriesToModel(model);
+            addCreateFormDependencies(model, authentication);
             return "seller_create_post";
 
         } catch (Exception e) {
             // Handle unexpected errors
             model.addAttribute("errorMessage", "Đã xảy ra lỗi không mong muốn. Vui lòng thử lại.");
-            addCategoriesToModel(model);
+            addCreateFormDependencies(model, authentication);
             return "seller_create_post";
         }
     }
@@ -252,14 +257,15 @@ public class SellerController {
      */
     @GetMapping("/posts/{postId}/edit")
     public String showEditPostForm(
-            @PathVariable Integer postId,
+            @PathVariable String postId,
             Authentication authentication,
             Model model,
             RedirectAttributes redirectAttributes) {
 
         try {
+            Integer decodedPostId = decodePostIdOrThrow(postId);
             String username = authentication.getName();
-            Post post = postService.getPostByIdAndSeller(postId, username);
+            Post post = postService.getPostByIdAndSeller(decodedPostId, username);
 
             // Add current user for sidebar
             User user = userRepository.findByUsername(username).orElse(null);
@@ -277,7 +283,7 @@ public class SellerController {
             model.addAttribute("categories", categoryRepository.findAllOrderByDisplayOrderAsc());
 
             // Add credential statistics
-            PostService.CredentialStats stats = postService.getCredentialStats(postId);
+            PostService.CredentialStats stats = postService.getCredentialStats(decodedPostId);
             model.addAttribute("credentialStats", stats);
 
             return "seller_edit_post";
@@ -293,23 +299,32 @@ public class SellerController {
      */
     @PostMapping("/posts/{postId}")
     public String updatePost(
-            @PathVariable Integer postId,
+            @PathVariable String postId,
             @Valid @ModelAttribute("postForm") PostForm postForm,
             BindingResult bindingResult,
             Authentication authentication,
             Model model,
             RedirectAttributes redirectAttributes) {
+        Integer decodedPostId;
+        try {
+            decodedPostId = decodePostIdOrThrow(postId);
+        } catch (IllegalArgumentException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Bài đăng không hợp lệ.");
+            return "redirect:/seller/posts";
+        }
+
+        validatePostForm(postForm, bindingResult, false);
 
         if (bindingResult.hasErrors()) {
             try {
                 String username = authentication.getName();
-                Post post = postService.getPostByIdAndSeller(postId, username);
+                Post post = postService.getPostByIdAndSeller(decodedPostId, username);
                 // Add current user for sidebar
                 User user = userRepository.findByUsername(username).orElse(null);
                 model.addAttribute("currentUser", user);
                 model.addAttribute("post", post);
                 model.addAttribute("categories", categoryRepository.findAllOrderByDisplayOrderAsc());
-                model.addAttribute("credentialStats", postService.getCredentialStats(postId));
+                model.addAttribute("credentialStats", postService.getCredentialStats(decodedPostId));
                 return "seller_edit_post";
             } catch (IllegalArgumentException e) {
                 redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
@@ -319,24 +334,24 @@ public class SellerController {
 
         try {
             String username = authentication.getName();
-            postService.updatePost(postId, postForm, username);
+            postService.updatePost(decodedPostId, postForm, username);
 
             redirectAttributes.addFlashAttribute("successMessage", "Cập nhật bài đăng thành công!");
             return "redirect:/seller/posts";
 
         } catch (IOException e) {
             model.addAttribute("errorMessage", "Lỗi tải lên hình ảnh: " + e.getMessage());
-            addCategoriesToModelForEdit(model, postId, authentication);
+            addCategoriesToModelForEdit(model, decodedPostId, authentication);
             return "seller_edit_post";
 
         } catch (IllegalArgumentException e) {
             model.addAttribute("errorMessage", e.getMessage());
-            addCategoriesToModelForEdit(model, postId, authentication);
+            addCategoriesToModelForEdit(model, decodedPostId, authentication);
             return "seller_edit_post";
 
         } catch (Exception e) {
             model.addAttribute("errorMessage", "Đã xảy ra lỗi không mong muốn. Vui lòng thử lại.");
-            addCategoriesToModelForEdit(model, postId, authentication);
+            addCategoriesToModelForEdit(model, decodedPostId, authentication);
             return "seller_edit_post";
         }
     }
@@ -346,13 +361,14 @@ public class SellerController {
      */
     @PostMapping("/posts/{postId}/delete")
     public String deletePost(
-            @PathVariable Integer postId,
+            @PathVariable String postId,
             Authentication authentication,
             RedirectAttributes redirectAttributes) {
 
         try {
+            Integer decodedPostId = decodePostIdOrThrow(postId);
             String username = authentication.getName();
-            postService.deletePost(postId, username);
+            postService.deletePost(decodedPostId, username);
             redirectAttributes.addFlashAttribute("successMessage", "Xóa bài đăng thành công!");
 
         } catch (IllegalArgumentException e) {
@@ -372,7 +388,7 @@ public class SellerController {
      */
     @GetMapping("/posts/{postId}/credentials")
     public String manageCredentials(
-            @PathVariable Integer postId,
+            @PathVariable String postId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
@@ -384,8 +400,9 @@ public class SellerController {
             RedirectAttributes redirectAttributes) {
 
         try {
+            Integer decodedPostId = decodePostIdOrThrow(postId);
             String username = authentication.getName();
-            Post post = postService.getPostByIdAndSeller(postId, username);
+            Post post = postService.getPostByIdAndSeller(decodedPostId, username);
 
             // Add current user for sidebar
             User user = userRepository.findByUsername(username).orElse(null);
@@ -404,10 +421,10 @@ public class SellerController {
 
             // Get paginated credentials
             Page<PostCredential> credentialsPage = postService.getCredentialsByPostIdWithFilters(
-                postId, status, keyword, pageable);
+                decodedPostId, status, keyword, pageable);
 
             // Get stats (still need full stats for the summary cards)
-            PostService.CredentialStats stats = postService.getCredentialStats(postId);
+            PostService.CredentialStats stats = postService.getCredentialStats(decodedPostId);
 
             model.addAttribute("post", post);
             model.addAttribute("credentialsPage", credentialsPage);
@@ -448,20 +465,28 @@ public class SellerController {
      */
     @PostMapping("/posts/{postId}/credentials")
     public String addCredential(
-            @PathVariable Integer postId,
+            @PathVariable String postId,
             @Valid @ModelAttribute("credentialForm") CredentialForm credentialForm,
             BindingResult bindingResult,
             Authentication authentication,
             RedirectAttributes redirectAttributes) {
+        Integer decodedPostId;
+        try {
+            decodedPostId = decodePostIdOrThrow(postId);
+        } catch (IllegalArgumentException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Bài đăng không hợp lệ.");
+            return "redirect:/seller/posts";
+        }
+        String encodedPostId = idEncoder.encodePostId(decodedPostId);
 
         if (bindingResult.hasErrors()) {
             redirectAttributes.addFlashAttribute("errorMessage", "Vui lòng điền đầy đủ thông tin tài khoản.");
-            return "redirect:/seller/posts/" + postId + "/credentials";
+            return "redirect:/seller/posts/" + encodedPostId + "/credentials";
         }
 
         try {
             String username = authentication.getName();
-            postService.addCredential(postId, credentialForm, username);
+            postService.addCredential(decodedPostId, credentialForm, username);
             redirectAttributes.addFlashAttribute("successMessage", "Thêm tài khoản thành công!");
 
         } catch (IllegalArgumentException e) {
@@ -471,7 +496,7 @@ public class SellerController {
             redirectAttributes.addFlashAttribute("errorMessage", "Đã xảy ra lỗi khi thêm tài khoản.");
         }
 
-        return "redirect:/seller/posts/" + postId + "/credentials";
+        return "redirect:/seller/posts/" + encodedPostId + "/credentials";
     }
 
     /**
@@ -480,13 +505,14 @@ public class SellerController {
     @PostMapping("/posts/{postId}/credentials/bulk")
     @ResponseBody
     public ResponseEntity<?> addCredentialsBulk(
-            @PathVariable Integer postId,
+            @PathVariable String postId,
             @RequestBody List<CredentialForm> credentialForms,
             Authentication authentication) {
 
         try {
+            Integer decodedPostId = decodePostIdOrThrow(postId);
             String username = authentication.getName();
-            List<PostCredential> added = postService.addCredentials(postId, credentialForms, username);
+            List<PostCredential> added = postService.addCredentials(decodedPostId, credentialForms, username);
             return ResponseEntity.ok(java.util.Map.of(
                     "success", true,
                     "message", "Đã thêm " + added.size() + " tài khoản thành công!",
@@ -546,9 +572,16 @@ public class SellerController {
     @PostMapping("/credentials/{credentialId}/delete")
     public String deleteCredential(
             @PathVariable Integer credentialId,
-            @RequestParam Integer postId,
+            @RequestParam String postId,
             Authentication authentication,
             RedirectAttributes redirectAttributes) {
+        Integer decodedPostId;
+        try {
+            decodedPostId = decodePostIdOrThrow(postId);
+        } catch (IllegalArgumentException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Bài đăng không hợp lệ.");
+            return "redirect:/seller/posts";
+        }
 
         try {
             String username = authentication.getName();
@@ -562,7 +595,7 @@ public class SellerController {
             redirectAttributes.addFlashAttribute("errorMessage", "Đã xảy ra lỗi khi xóa tài khoản.");
         }
 
-        return "redirect:/seller/posts/" + postId + "/credentials";
+        return "redirect:/seller/posts/" + idEncoder.encodePostId(decodedPostId) + "/credentials";
     }
 
     /**
@@ -571,15 +604,16 @@ public class SellerController {
     @GetMapping("/posts/{postId}/credentials/stats")
     @ResponseBody
     public ResponseEntity<PostService.CredentialStats> getCredentialStats(
-            @PathVariable Integer postId,
+            @PathVariable String postId,
             Authentication authentication) {
 
         try {
+            Integer decodedPostId = decodePostIdOrThrow(postId);
             String username = authentication.getName();
             // Verify ownership
-            postService.getPostByIdAndSeller(postId, username);
+            postService.getPostByIdAndSeller(decodedPostId, username);
             
-            PostService.CredentialStats stats = postService.getCredentialStats(postId);
+            PostService.CredentialStats stats = postService.getCredentialStats(decodedPostId);
             return ResponseEntity.ok(stats);
 
         } catch (IllegalArgumentException e) {
@@ -595,6 +629,14 @@ public class SellerController {
     private void addCategoriesToModel(Model model) {
         List<Category> categories = categoryRepository.findAllOrderByDisplayOrderAsc();
         model.addAttribute("categories", categories);
+    }
+
+    private void addCreateFormDependencies(Model model, Authentication authentication) {
+        addCategoriesToModel(model);
+        if (authentication != null) {
+            User user = userRepository.findByUsername(authentication.getName()).orElse(null);
+            model.addAttribute("currentUser", user);
+        }
     }
 
     /**
@@ -624,6 +666,48 @@ public class SellerController {
             case "status" -> "order.orderStatus.statusName";
             default -> "order.createdAt";
         };
+    }
+
+    private void validatePostForm(PostForm postForm, BindingResult bindingResult, boolean requireThumbnail) {
+        if (postForm == null) {
+            return;
+        }
+
+        if (isBlankRichText(postForm.getDescription())) {
+            bindingResult.rejectValue("description", "description.required", "Mô tả chi tiết không được để trống");
+        }
+
+        if (!postForm.hasCredentials()) {
+            bindingResult.rejectValue("credentials", "credentials.required", "Vui lòng thêm ít nhất 1 tài khoản hợp lệ");
+        }
+
+        MultipartFile thumbnailFile = postForm.getThumbnailFile();
+        if (requireThumbnail && (thumbnailFile == null || thumbnailFile.isEmpty())) {
+            bindingResult.rejectValue("thumbnailFile", "thumbnail.required", "Hình ảnh đại diện là bắt buộc khi đăng bài");
+        }
+
+        if (thumbnailFile != null && !thumbnailFile.isEmpty()) {
+            String contentType = thumbnailFile.getContentType();
+            if (contentType == null || !contentType.startsWith("image/")) {
+                bindingResult.rejectValue("thumbnailFile", "thumbnail.invalidType", "Chỉ chấp nhận file hình ảnh cho thumbnail");
+            }
+        }
+    }
+
+    private boolean isBlankRichText(String html) {
+        if (html == null) {
+            return true;
+        }
+        if (html.matches("(?is).*<(img|video|iframe|embed|object)\\b[^>]*>.*")) {
+            return false;
+        }
+        String plainText = html
+                .replaceAll("(?i)<br\\s*/?>", " ")
+                .replaceAll("(?i)</p>", " ")
+                .replaceAll("<[^>]+>", " ")
+                .replace("&nbsp;", " ")
+                .trim();
+        return plainText.isBlank();
     }
 
     // ==================== Dispute Management Endpoints ====================
@@ -749,5 +833,9 @@ public class SellerController {
         }
 
         return "redirect:/seller/disputes/" + disputeId;
+    }
+
+    private Integer decodePostIdOrThrow(String postIdToken) {
+        return idEncoder.decodePostId(postIdToken);
     }
 }

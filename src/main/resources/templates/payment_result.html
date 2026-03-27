@@ -65,7 +65,7 @@
         </div>
 
         <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-            <a th:if="${orderId != null}" th:href="@{/payment/status/{orderId}(orderId=${orderId})}"
+            <a th:if="${orderId != null}" th:href="@{/payment/status/{orderId}(orderId=${@idEncoder.encodeOrderId(orderId)})}"
                class="rounded-2xl bg-sky-600 px-5 py-3 text-center font-bold text-white hover:bg-sky-700">
                 Xem trạng thái đơn hàng
             </a>

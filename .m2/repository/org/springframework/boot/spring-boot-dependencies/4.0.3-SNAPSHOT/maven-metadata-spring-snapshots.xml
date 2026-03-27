@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata modelVersion="1.1.0">
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-dependencies</artifactId>
+  <versioning>
+    <lastUpdated>20260219120837</lastUpdated>
+    <snapshot>
+      <timestamp>20260219.120249</timestamp>
+      <buildNumber>65</buildNumber>
+    </snapshot>
+    <snapshotVersions>
+      <snapshotVersion>
+        <extension>pom.asc</extension>
+        <value>4.0.3-20260219.035328-64</value>
+        <updated>20260219035328</updated>
+      </snapshotVersion>
+      <snapshotVersion>
+        <extension>pom</extension>
+        <value>4.0.3-20260219.120249-65</value>
+        <updated>20260219120249</updated>
+      </snapshotVersion>
+    </snapshotVersions>
+  </versioning>
+  <version>4.0.3-SNAPSHOT</version>
+</metadata>

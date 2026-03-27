@@ -27,7 +27,7 @@
         }
     </script>
 </head>
-<body class="font-sans antialiased bg-surface text-gray-900">
+<body class="font-sans antialiased bg-surface text-gray-900 min-h-screen flex flex-col">
 <nav class="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
         <a href="/" class="flex items-center gap-2">
@@ -36,18 +36,98 @@
             </div>
             <span class="font-bold text-xl">TrustBridge</span>
         </a>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-4 lg:gap-5">
             <a href="/marketplace" class="text-sm font-semibold text-gray-600 hover:text-primary">Marketplace</a>
-            <a th:if="${canPurchase}" href="/buyer/cart" class="relative text-sm font-semibold text-gray-600 hover:text-primary">
+            <a th:if="${isAuthenticated and navbarWalletBalance != null}"
+               th:href="${navbarWalletPath}"
+               class="hidden lg:inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-2 text-sm font-bold text-primary border border-blue-100 shadow-sm hover:bg-blue-100 transition-colors">
+                <i class="ph-fill ph-wallet"></i>
+                <span th:text="${#numbers.formatDecimal(navbarWalletBalance, 0, 'COMMA', 0, 'POINT')} + ' ₫'">0 ₫</span>
+            </a>
+            <a th:if="${canPurchase}" href="/buyer/cart" class="relative inline-flex items-center rounded-full px-2 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 hover:text-primary transition-colors">
                 Giỏ hàng
                 <span id="cartCountBadge"
                       class="absolute -right-5 -top-2 hidden min-w-[1.25rem] rounded-full bg-primary px-1.5 py-0.5 text-center text-[0.7rem] font-bold leading-none text-white">0</span>
             </a>
+            <th:block th:if="${isAuthenticated}">
+                <div class="relative" data-navbar-notifications="true"
+                     th:attr="data-initial-unread=${navbarUnreadNotificationCount},data-csrf-token=${_csrf != null ? _csrf.token : ''},data-csrf-header=${_csrf != null ? _csrf.headerName : ''}">
+                    <button type="button"
+                            class="relative cursor-pointer rounded-full p-2 text-gray-600 hover:bg-gray-100 hover:text-primary transition-colors"
+                            data-notification-bell
+                            aria-label="Thông báo">
+                        <i class="ph-fill ph-bell text-xl"></i>
+                        <span class="hidden absolute -top-1 -right-1 min-w-[1.25rem] h-5 px-1 rounded-full bg-error text-white text-[10px] font-bold items-center justify-center border-2 border-white"
+                              data-notification-badge>0</span>
+                    </button>
+
+                    <div class="hidden absolute right-0 mt-3 w-[22rem] max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden"
+                         data-notification-dropdown>
+                        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                            <div>
+                                <div class="text-sm font-extrabold text-gray-900">Thông báo</div>
+                                <div class="text-xs text-gray-500">Cập nhật mới nhất của bạn</div>
+                            </div>
+                            <button type="button"
+                                    class="text-xs font-bold text-primary hover:text-blue-700 transition-colors"
+                                    data-mark-all-read>
+                                Đánh dấu đã đọc tất cả
+                            </button>
+                        </div>
+
+                        <div class="max-h-96 overflow-y-auto">
+                            <div class="px-4 py-10 text-center text-sm text-gray-500" data-notification-loading>
+                                Đang tải thông báo...
+                            </div>
+                            <div class="hidden px-4 py-10 text-center text-sm text-gray-500" data-notification-empty>
+                                Bạn chưa có thông báo nào.
+                            </div>
+                            <div class="divide-y divide-gray-100" data-notification-list></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="relative" id="userMenuWrapper">
+                    <button id="userMenuBtn"
+                            type="button"
+                            class="flex items-center gap-3 rounded-full px-2 py-1 text-gray-600 hover:text-primary font-semibold text-sm transition-colors"
+                            data-user-menu-toggle>
+                        <div class="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white font-bold">
+                            <span th:text="${navbarUserInitials}">TB</span>
+                        </div>
+                        <span class="hidden sm:inline" th:text="${currentUser != null ? currentUser.username : 'Tài khoản'}">Tài khoản</span>
+                        <i class="ph ph-caret-down"></i>
+                    </button>
+
+                    <div id="userMenu"
+                         class="hidden absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50"
+                         data-user-menu>
+                        <a th:href="${navbarHomePath}"
+                           class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-bold">
+                            <i class="ph ph-squares-four"></i>
+                            <span>Dashboard</span>
+                        </a>
+                        <a th:href="${navbarWalletPath}"
+                           class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-bold">
+                            <i class="ph ph-wallet"></i>
+                            <span>Ví của tôi</span>
+                        </a>
+                        <div class="border-t border-gray-100 my-1"></div>
+                        <form th:action="@{/logout}" method="POST">
+                            <button type="submit"
+                                    class="w-full flex items-center gap-2 px-4 py-2 text-sm text-error hover:bg-red-50 font-bold text-left">
+                                <i class="ph ph-sign-out"></i>
+                                <span>Đăng xuất</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </th:block>
         </div>
     </div>
 </nav>
 
-<main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
     <div class="flex items-center gap-2 text-sm text-gray-500 mb-6">
         <a href="/" class="hover:text-primary">Trang chủ</a>
         <i class="ph ph-caret-right text-xs"></i>
@@ -128,10 +208,16 @@
             <section class="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
                 <h2 class="text-xl font-bold mb-4">Thao tác nhanh</h2>
                 <div th:if="${canPurchase and canPurchasePost}" class="space-y-3">
-                    <button type="button" th:onclick="'buyNow(' + ${post.postId} + ')'" class="w-full rounded-2xl bg-primary px-4 py-3 text-white font-bold hover:bg-primary-dark transition-colors">
+                    <button type="button"
+                            th:attr="data-post-id=${@idEncoder.encodePostId(post.postId)}"
+                            onclick="buyNow(this.dataset.postId)"
+                            class="w-full rounded-2xl bg-primary px-4 py-3 text-white font-bold hover:bg-primary-dark transition-colors">
                         Mua ngay
                     </button>
-                    <button type="button" th:onclick="'addToCart(' + ${post.postId} + ')'" class="w-full rounded-2xl border border-gray-200 px-4 py-3 font-bold text-gray-700 hover:bg-gray-50 transition-colors">
+                    <button type="button"
+                            th:attr="data-post-id=${@idEncoder.encodePostId(post.postId)}"
+                            onclick="addToCart(this.dataset.postId)"
+                            class="w-full rounded-2xl border border-gray-200 px-4 py-3 font-bold text-gray-700 hover:bg-gray-50 transition-colors">
                         Thêm vào giỏ hàng
                     </button>
                 </div>
@@ -177,6 +263,18 @@
     <span id="toastMessage">Thành công!</span>
 </div>
 
+<footer class="bg-gray-900 text-white pt-12 pb-6 mt-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-col gap-4 border-t border-gray-800 pt-8 text-sm text-gray-400 md:flex-row md:items-center md:justify-between">
+            <div class="flex items-center gap-2">
+                <i class="ph-fill ph-shield-check text-primary text-2xl"></i>
+                <span class="font-bold text-lg tracking-tight text-gray-300">TrustBridge Market</span>
+            </div>
+            <p>&copy; 2026 TrustBridge Market. Bảo vệ qua hệ thống giao dịch trung gian.</p>
+        </div>
+    </div>
+</footer>
+
 <script th:inline="javascript">
     const isAuthenticated = /*[[${isAuthenticated}]]*/ false;
     const canPurchase = /*[[${canPurchase}]]*/ false;
@@ -188,10 +286,10 @@
         }
 
         if (!isAuthenticated) {
-            window.location.href = '/login.html?redirect=/buyer/checkout?postId=' + postId;
+            window.location.href = '/login.html?redirect=' + encodeURIComponent('/buyer/checkout?postId=' + postId);
             return;
         }
-        window.location.href = '/buyer/checkout?postId=' + postId;
+        window.location.href = '/buyer/checkout?postId=' + encodeURIComponent(postId);
     }
 
     function refreshCartCount() {
@@ -230,11 +328,11 @@
         }
 
         if (!isAuthenticated) {
-            window.location.href = '/login.html?redirect=/marketplace/' + postId;
+            window.location.href = '/login.html?redirect=' + encodeURIComponent('/marketplace/' + postId);
             return;
         }
 
-        fetch('/api/cart/add?postId=' + postId, { method: 'POST' })
+        fetch('/api/cart/add?postId=' + encodeURIComponent(postId), { method: 'POST' })
             .then(async response => {
                 const payload = await response.json().catch(() => ({}));
                 if (response.ok) {
@@ -243,7 +341,7 @@
                     return;
                 }
                 if (response.status === 401) {
-                    window.location.href = '/login.html?redirect=/marketplace/' + postId;
+                    window.location.href = '/login.html?redirect=' + encodeURIComponent('/marketplace/' + postId);
                     return;
                 }
                 showToast(payload.message || 'Có lỗi xảy ra!', 'error');
@@ -268,5 +366,6 @@
 
     refreshCartCount();
 </script>
+<script th:src="@{/js/navbar-notifications.js}" defer></script>
 </body>
 </html>

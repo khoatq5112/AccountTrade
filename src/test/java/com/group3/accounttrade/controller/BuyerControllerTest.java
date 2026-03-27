@@ -12,6 +12,7 @@ import com.group3.accounttrade.service.BuyerOrderService;
 import com.group3.accounttrade.service.CartService;
 import com.group3.accounttrade.service.OrderCheckoutService;
 import com.group3.accounttrade.service.WalletService;
+import com.group3.accounttrade.util.IdEncoder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,6 +27,7 @@ import org.springframework.ui.ExtendedModelMap;
 import org.springframework.ui.Model;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,6 +36,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
@@ -67,6 +71,9 @@ class BuyerControllerTest {
 
     @Mock
     private WalletService walletService;
+
+    @Mock
+    private IdEncoder idEncoder;
 
     @InjectMocks
     private BuyerController buyerController;
@@ -110,10 +117,12 @@ class BuyerControllerTest {
                         .hasSufficientBalance(true)
                         .build());
         when(walletService.getMinimumTopUpAmount()).thenReturn(BigDecimal.valueOf(10000));
+        when(idEncoder.decodePostId("5")).thenReturn(5);
+        when(idEncoder.encodePostId(5)).thenReturn("post_5token");
 
         Model model = new ExtendedModelMap();
 
-        String viewName = buyerController.checkout(5, null, model);
+        String viewName = buyerController.checkout("5", null, model);
 
         assertEquals("checkout", viewName);
         assertEquals(post, model.getAttribute("post"));
@@ -129,12 +138,14 @@ class BuyerControllerTest {
         when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
         when(orderCheckoutService.previewWalletCheckout(buyer, 5))
                 .thenThrow(new IllegalStateException("Sản phẩm đã hết tài khoản khả dụng."));
+        when(idEncoder.decodePostId("5")).thenReturn(5);
+        when(idEncoder.encodePostId(5)).thenReturn("post_5token");
 
         Model model = new ExtendedModelMap();
 
-        String viewName = buyerController.checkout(5, null, model);
+        String viewName = buyerController.checkout("5", null, model);
 
-        assertEquals("redirect:/marketplace/5?error=unavailable", viewName);
+        assertEquals("redirect:/marketplace/post_5token?error=unavailable", viewName);
     }
 
     @Test
@@ -148,6 +159,8 @@ class BuyerControllerTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("buyer", "pw", List.of()));
         when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
+        when(idEncoder.decodePostId("9")).thenReturn(9);
+        when(idEncoder.encodePostId(9)).thenReturn("post_9token");
         when(orderCheckoutService.initiateCheckout(org.mockito.ArgumentMatchers.eq(buyer), org.mockito.ArgumentMatchers.eq(9), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(checkoutSession);
 
@@ -166,6 +179,8 @@ class BuyerControllerTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("buyer", "pw", List.of()));
         when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
+        when(idEncoder.decodePostId("9")).thenReturn(9);
+        when(idEncoder.encodePostId(9)).thenReturn("post_9token");
         when(orderCheckoutService.initiateWalletCheckout(buyer, 9)).thenReturn(order);
 
         mockMvc.perform(post("/buyer/checkout")
@@ -184,6 +199,8 @@ class BuyerControllerTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("buyer", "pw", List.of()));
         when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
+        when(idEncoder.decodePostId("9")).thenReturn(9);
+        when(idEncoder.encodePostId(9)).thenReturn("post_9token");
         when(orderCheckoutService.initiateWalletCheckout(buyer, 9))
                 .thenThrow(new WalletService.InsufficientBalanceException("Số dư không đủ."));
 
@@ -191,7 +208,7 @@ class BuyerControllerTest {
                         .param("postId", "9")
                         .param("paymentMethod", "WALLET"))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/buyer/checkout?postId=9"))
+                .andExpect(redirectedUrl("/buyer/checkout?postId=post_9token"))
                 .andExpect(flash().attribute("errorMessage", "Số dư không đủ."));
     }
 
@@ -203,6 +220,8 @@ class BuyerControllerTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("buyer", "pw", List.of()));
         when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
+        when(idEncoder.decodePostId("9")).thenReturn(9);
+        when(idEncoder.encodePostId(9)).thenReturn("post_9token");
         when(orderCheckoutService.initiateWalletCheckout(buyer, 9))
                 .thenThrow(new RuntimeException("database exploded"));
 
@@ -210,7 +229,7 @@ class BuyerControllerTest {
                         .param("postId", "9")
                         .param("paymentMethod", "WALLET"))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/buyer/checkout?postId=9"))
+                .andExpect(redirectedUrl("/buyer/checkout?postId=post_9token"))
                 .andExpect(flash().attribute("errorMessage", "Thanh toán bằng ví thất bại. Vui lòng thử lại."));
     }
 
@@ -222,6 +241,7 @@ class BuyerControllerTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("buyer", "pw", List.of()));
         when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
+        when(idEncoder.decodePostId("9")).thenReturn(9);
         doThrow(new IllegalArgumentException("Số tiền nạp tối thiểu là 10,000 ₫."))
                 .when(walletService)
                 .initiateTopUp(eq(buyer),
@@ -236,5 +256,47 @@ class BuyerControllerTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/buyer/checkout?postId=9"))
                 .andExpect(flash().attributeExists("errorMessage"));
+    }
+
+    @Test
+    void purchasesHideExpiredOrdersUnlessExplicitlyHighlighted() {
+        User buyer = User.builder().userId(1).username("buyer").build();
+        Order expiredOrder = Order.builder()
+                .orderId(44L)
+                .createdAt(LocalDateTime.now().minusHours(2))
+                .orderStatus(com.group3.accounttrade.entity.OrderStatus.builder()
+                        .statusName(com.group3.accounttrade.entity.OrderStatus.PAYMENT_EXPIRED)
+                        .build())
+                .build();
+        Order activeOrder = Order.builder()
+                .orderId(45L)
+                .createdAt(LocalDateTime.now().minusHours(1))
+                .orderStatus(com.group3.accounttrade.entity.OrderStatus.builder()
+                        .statusName(com.group3.accounttrade.entity.OrderStatus.AWAITING_PAYMENT)
+                        .build())
+                .build();
+
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("buyer", "pw", List.of()));
+        when(userRepository.findByUsername("buyer")).thenReturn(Optional.of(buyer));
+        when(walletRepository.findByUser_UserId(1)).thenReturn(Optional.empty());
+        when(orderRepository.findByBuyer(buyer)).thenReturn(List.of(expiredOrder, activeOrder));
+
+        Model hiddenModel = new ExtendedModelMap();
+        String hiddenView = buyerController.viewPurchases(null, null, null, hiddenModel, null);
+
+        assertEquals("buyer_purchases", hiddenView);
+        List<Order> hiddenOrders = (List<Order>) hiddenModel.getAttribute("workflowOrders");
+        assertEquals(1, hiddenOrders.size());
+        assertEquals(45L, hiddenOrders.get(0).getOrderId());
+
+        Model highlightedModel = new ExtendedModelMap();
+        String highlightedView = buyerController.viewPurchases(44L, null, null, highlightedModel, null);
+
+        assertEquals("buyer_purchases", highlightedView);
+        List<Order> highlightedOrders = (List<Order>) highlightedModel.getAttribute("workflowOrders");
+        assertEquals(2, highlightedOrders.size());
+        assertTrue(highlightedOrders.stream().anyMatch(order -> order.getOrderId().equals(44L)));
+        assertTrue(highlightedOrders.stream().anyMatch(order -> order.getOrderId().equals(45L)));
     }
 }

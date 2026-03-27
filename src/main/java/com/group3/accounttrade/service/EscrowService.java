@@ -5,7 +5,9 @@ import com.group3.accounttrade.repository.*;
 import com.group3.accounttrade.service.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +46,9 @@ public class EscrowService {
 
     @Value("${escrow.verification-timeout-hours:24}")
     private int verificationTimeoutHours;
+
+    @Value("${escrow.auto-release-check-ms:60000}")
+    private long autoReleaseCheckMs;
 
     // Escrow status constants
     public static final String STATUS_NOT_CREATED = "NOT_CREATED";
@@ -381,24 +386,37 @@ public class EscrowService {
      * Scheduled task to auto-release escrows after verification timeout.
      * Runs every hour.
      */
-    @Scheduled(fixedRate = 3600000) // Every hour
+    @Scheduled(fixedRateString = "${escrow.auto-release-check-ms:60000}")
     @Transactional
     public void autoReleaseEscrows() {
-        log.info("Running auto-release escrow check...");
-        
-        // Find escrows in HOLDING status past their release time
-        List<Escrow> escrowsToRelease = escrowRepository.findExpiredEscrows(STATUS_HOLDING, LocalDateTime.now());
+        autoReleaseEscrowsAt(LocalDateTime.now(), false);
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    @Transactional
+    public void catchUpExpiredEscrowsOnStartup() {
+        autoReleaseEscrowsAt(LocalDateTime.now(), true);
+    }
+
+    @Transactional
+    protected void autoReleaseEscrowsAt(LocalDateTime now, boolean startupCatchUp) {
+        log.info("Running auto-release escrow check{}...", startupCatchUp ? " on startup" : "");
+
+        List<Escrow> escrowsToRelease = escrowRepository.findExpiredEscrows(STATUS_HOLDING, now);
+        int releasedCount = 0;
 
         for (Escrow escrow : escrowsToRelease) {
             try {
                 releaseEscrow(escrow.getOrder().getOrderId(), "Auto-release after buyer verification timeout", null);
+                releasedCount++;
                 log.info("Auto-released escrow for order: {}", escrow.getOrder().getOrderNumber());
             } catch (Exception e) {
                 log.error("Failed to auto-release escrow for order: {}", escrow.getOrder().getOrderNumber(), e);
             }
         }
 
-        log.info("Auto-release check completed. Released {} escrows", escrowsToRelease.size());
+        log.info("Auto-release check completed. Released {} of {} expired escrows. Interval={}ms",
+                releasedCount, escrowsToRelease.size(), autoReleaseCheckMs);
     }
 
     /**

@@ -89,7 +89,7 @@
                     </div>
 
                     <form th:action="@{/buyer/wallet/topup}" method="post" class="rounded-3xl border border-gray-200 bg-white p-5 space-y-4">
-                        <input type="hidden" name="pendingPostId" th:value="${post.postId}">
+                        <input type="hidden" name="pendingPostId" th:value="${@idEncoder.encodePostId(post.postId)}">
                         <input type="hidden" name="requiredAmount" th:value="${walletDeficit}">
                         <input type="hidden"
                                id="topup-amount-hidden"
@@ -120,7 +120,7 @@
                 <p class="text-sm text-gray-600">Ví sẽ bị trừ đúng số tiền của đơn hàng. Sau đó hệ thống tạo payment record, escrow hold và bàn giao credential trong cùng luồng xử lý.</p>
 
                 <form id="walletCheckoutForm" th:action="@{/buyer/checkout}" method="post" class="mt-6 space-y-3">
-                    <input type="hidden" name="postId" th:value="${post.postId}">
+                    <input type="hidden" name="postId" th:value="${@idEncoder.encodePostId(post.postId)}">
                     <input type="hidden" name="paymentMethod" value="WALLET">
                     <button id="openWalletConfirmDialog"
                             type="button"
@@ -147,12 +147,12 @@
                 </ol>
 
                 <form th:action="@{/buyer/checkout}" method="post" class="mt-6 space-y-3">
-                    <input type="hidden" name="postId" th:value="${post.postId}">
+                    <input type="hidden" name="postId" th:value="${@idEncoder.encodePostId(post.postId)}">
                     <input type="hidden" name="paymentMethod" value="VNPAY">
                     <button type="submit" class="w-full rounded-2xl border border-gray-200 px-4 py-3 text-gray-800 font-bold hover:bg-gray-50">
                         Tiếp tục tới VNPAY
                     </button>
-                    <a th:href="@{/marketplace/{postId}(postId=${post.postId})}" class="block w-full rounded-2xl border border-gray-200 px-4 py-3 text-center font-bold text-gray-700 hover:bg-gray-50">
+                    <a th:href="@{/marketplace/{postId}(postId=${@idEncoder.encodePostId(post.postId)})}" class="block w-full rounded-2xl border border-gray-200 px-4 py-3 text-center font-bold text-gray-700 hover:bg-gray-50">
                         Quay lại chi tiết sản phẩm
                     </a>
                 </form>

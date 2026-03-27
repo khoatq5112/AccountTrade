@@ -1,5 +1,6 @@
 package com.group3.accounttrade.controller;
 
+import com.group3.accounttrade.exception.InvalidIdException;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.LazyInitializationException;
 import org.springframework.stereotype.Controller;
@@ -39,6 +40,18 @@ public class GlobalExceptionHandler {
         redirectAttributes.addFlashAttribute(
                 "errorMessage",
                 "Lỗi hiển thị trang. Vui lòng thử lại.");
+        return "redirect:/buyer/dashboard";
+    }
+
+    @ExceptionHandler(InvalidIdException.class)
+    public String handleInvalidIdException(InvalidIdException exception,
+                                           RedirectAttributes redirectAttributes) {
+        log.error("[GLOBAL-ERROR] InvalidIdException caught: {}", exception.getMessage(), exception);
+        String errorMessage = "ID không hợp lệ.";
+        if (exception.getIdType() != null) {
+            errorMessage = String.format("ID %s không hợp lệ.", exception.getIdType());
+        }
+        redirectAttributes.addFlashAttribute("errorMessage", errorMessage);
         return "redirect:/buyer/dashboard";
     }
 
