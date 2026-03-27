@@ -433,7 +433,7 @@
                         <i class="ph ph-scales text-error"></i> Hành động của bạn
                     </h2>
                     <div class="space-y-3">
-                        <div th:if="${dispute.resolutionType == 'REPLACEMENT'}"
+                        <div th:if="${dispute.sellerProposalType == 'REPLACEMENT'}"
                              class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
                             Seller đã cấp credential thay thế. Hãy vào đơn hàng để kiểm tra lại credential mới.
                             Nếu dùng được, bạn có thể bấm Nhận hàng. Nếu vẫn lỗi, hãy dùng nút bên dưới để chuyển admin hoàn tiền.
@@ -456,12 +456,12 @@
                                 <i class="ph ph-check-circle"></i> Chấp nhận thay thế
                             </button>
                         </form>
-                        <a th:if="${dispute.resolutionType == 'REPLACEMENT'}"
+                        <a th:if="${dispute.sellerProposalType == 'REPLACEMENT'}"
                            th:href="@{/buyer/purchases(orderId=${dispute.order.orderId}, revealCredentialsOrderId=${dispute.order.orderId})}"
                            class="btn-outline w-full flex items-center justify-center gap-2 bg-white">
                             <i class="ph ph-key"></i> Xem credential thay thế
                         </a>
-                        <form th:if="${dispute.resolutionType == 'REPLACEMENT'}"
+                        <form th:if="${dispute.sellerProposalType == 'REPLACEMENT'}"
                               th:action="@{/buyer/disputes/{id}/replacement-failed(id=${dispute.disputeId})}"
                               method="POST"
                               onsubmit="return confirm('Xác nhận rằng credential thay thế vẫn không hoạt động và chuyển admin xử lý hoàn tiền?');">

@@ -154,7 +154,7 @@ public class DisputeService {
         notifyBuyer(dispute, "Dispute Opened",
                 String.format("Your dispute %s has been created. Seller has %d hours to respond before TrustBridge can intervene.",
                         dispute.getDisputeNumber(), disputeSlaTimeoutHours));
-        notifyAdmins("Dispute Monitoring",
+        notifyAdmins(dispute, "Dispute Monitoring",
                 String.format("Dispute %s was opened for order %s. Admin review becomes available after escalation or seller timeout.",
                         dispute.getDisputeNumber(), order.getOrderNumber()));
 
@@ -206,7 +206,7 @@ public class DisputeService {
 
         notifySeller(dispute, "Dispute Escalated",
                 String.format("Buyer escalated dispute %s to admin review.", dispute.getDisputeNumber()));
-        notifyAdmins("Dispute Escalated",
+        notifyAdmins(dispute, "Dispute Escalated",
                 String.format("Dispute %s is ready for admin review.", dispute.getDisputeNumber()));
     }
 
@@ -520,9 +520,8 @@ public class DisputeService {
         }
         ensureOpened(dispute, "Dispute is no longer open for replacement follow-up");
         if (!Dispute.PROPOSAL_REPLACEMENT.equals(dispute.getSellerProposalType())
-                || dispute.getSellerProposalCredentialId() == null
-                || !Dispute.RESOLUTION_REPLACEMENT.equals(dispute.getResolutionType())) {
-            throw new IllegalStateException("Replacement has not been accepted for this dispute");
+                || dispute.getSellerProposalCredentialId() == null) {
+            throw new IllegalStateException("Seller has not provided a valid replacement proposal");
         }
 
         Order order = requireOrder(dispute);
@@ -540,7 +539,9 @@ public class DisputeService {
         order.setConfirmationDeadline(null);
         orderRepository.save(order);
 
-        escrowService.freezeEscrow(order.getOrderId(), "Replacement credential failed. Escalated for admin refund review");
+        if (hasOrderStatus(order, OrderStatus.AWAITING_BUYER_CONFIRMATION)) {
+            escrowService.freezeEscrow(order.getOrderId(), "Replacement credential failed. Escalated for admin refund review");
+        }
         credentialService.markCredentialsAsDisputed(order, escalationReason);
         createAdminReviewRecord(disputeId, escalationReason);
         addDisputeActivityMessage(dispute, dispute.getOpenedBy(), DisputeMessage.ROLE_BUYER, escalationReason);
@@ -554,7 +555,7 @@ public class DisputeService {
         notifySeller(dispute, "Replacement Escalated",
                 String.format("Buyer reported that the replacement still failed for dispute %s. Admin review has started.",
                         dispute.getDisputeNumber()));
-        notifyAdmins("Replacement Failure Review",
+        notifyAdmins(dispute, "Replacement Failure Review",
                 String.format("Dispute %s requires admin refund review because the replacement credential still failed.",
                         dispute.getDisputeNumber()));
     }
@@ -861,6 +862,11 @@ public class DisputeService {
                 .build());
     }
 
+    private boolean hasOrderStatus(Order order, String statusName) {
+        return order.getOrderStatus() != null
+                && statusName.equalsIgnoreCase(order.getOrderStatus().getStatusName());
+    }
+
     private PostCredential reserveReplacementCredential(Dispute dispute,
                                                         Integer sellerId,
                                                         Integer replacementCredentialId,
@@ -1016,14 +1022,19 @@ public class DisputeService {
         );
     }
 
-    private void notifyAdmins(String title, String message) {
-        notificationService.broadcastNotification(
-                title,
-                message,
-                Notification.TYPE_SYSTEM,
-                Notification.PRIORITY_HIGH,
-                List.of("Admin")
-        );
+    private void notifyAdmins(Dispute dispute, String title, String message) {
+        userRepository.findByRole_RoleNameIgnoreCase("Admin")
+                .forEach(admin -> notificationService.createNotification(
+                        admin,
+                        Notification.TYPE_SYSTEM,
+                        NotificationPreference.CATEGORY_DISPUTE,
+                        title,
+                        message,
+                        Notification.PRIORITY_HIGH,
+                        "DISPUTE",
+                        dispute != null ? dispute.getDisputeId() : null,
+                        dispute != null ? "/admin/disputes/" + dispute.getDisputeId() : "/admin/disputes"
+                ));
     }
 
     private void createAdminReviewRecord(Long disputeId, String reason) {

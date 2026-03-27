@@ -59,8 +59,7 @@ public class NotificationService {
             String category = firstNonBlank(event.getNotificationCategory(),
                     template != null ? template.getNotificationCategory() : null);
             String type = firstNonBlank(template != null ? template.getNotificationType() : null, category, event.getEventType());
-            String actionUrl = firstNonBlank(event.getActionUrl(),
-                    template != null ? processTemplate(template.getDefaultActionUrlTemplate(), event.getPayload()) : null);
+            String actionUrl = resolveActionUrl(event, template);
 
             return createNotification(
                     event.getRecipient(),
@@ -122,6 +121,8 @@ public class NotificationService {
                 return null;
             }
 
+            String normalizedActionUrl = normalizeActionUrl(recipient, relatedEntityType, relatedEntityId, actionUrl);
+
             Notification notification = Notification.builder()
                     .user(recipient)
                     .notificationType(notificationType)
@@ -133,7 +134,7 @@ public class NotificationService {
                     .templateVariables(templateVariables)
                     .relatedEntityType(relatedEntityType)
                     .relatedEntityId(relatedEntityId)
-                    .actionUrl(actionUrl)
+                    .actionUrl(normalizedActionUrl)
                     .inAppSent(inAppEnabled)
                     .inAppSentAt(inAppEnabled ? LocalDateTime.now() : null)
                     .build();
@@ -316,6 +317,30 @@ public class NotificationService {
         return "You have a new notification regarding " + humanize(event.getEventType()).toLowerCase();
     }
 
+    private String resolveActionUrl(NotificationEvent event, NotificationTemplate template) {
+        String candidate = firstNonBlank(event.getActionUrl(),
+                template != null ? processTemplate(template.getDefaultActionUrlTemplate(), event.getPayload()) : null);
+
+        if (candidate == null || event == null || event.getRecipient() == null) {
+            return candidate;
+        }
+
+        if ("DISPUTE".equalsIgnoreCase(event.getRelatedEntityType()) && event.getRelatedEntityId() != null) {
+            String roleName = event.getRecipient().getRole() != null ? event.getRecipient().getRole().getRoleName() : null;
+            if ("Admin".equalsIgnoreCase(roleName)) {
+                return "/admin/disputes/" + event.getRelatedEntityId();
+            }
+            if ("Seller".equalsIgnoreCase(roleName)) {
+                return "/seller/disputes/" + event.getRelatedEntityId();
+            }
+            if ("Buyer".equalsIgnoreCase(roleName)) {
+                return "/buyer/disputes/" + event.getRelatedEntityId();
+            }
+        }
+
+        return candidate;
+    }
+
     private String processTemplate(String template, Map<String, Object> variables) {
         if (template == null || variables == null || variables.isEmpty()) {
             return template;
@@ -351,12 +376,39 @@ public class NotificationService {
                 .message(notification.getMessage())
                 .relatedEntityType(notification.getRelatedEntityType())
                 .relatedEntityId(notification.getRelatedEntityId())
-                .actionUrl(notification.getActionUrl())
+                .actionUrl(normalizeActionUrl(
+                        notification.getUser(),
+                        notification.getRelatedEntityType(),
+                        notification.getRelatedEntityId(),
+                        notification.getActionUrl()))
                 .isRead(Boolean.TRUE.equals(notification.getIsRead()))
                 .readAt(notification.getReadAt())
                 .createdAt(notification.getCreatedAt())
                 .emailSent(Boolean.TRUE.equals(notification.getEmailSent()))
                 .build();
+    }
+
+    private String normalizeActionUrl(User recipient,
+                                      String relatedEntityType,
+                                      Long relatedEntityId,
+                                      String actionUrl) {
+        if ("DISPUTE".equalsIgnoreCase(relatedEntityType) && relatedEntityId != null) {
+            String roleName = recipient != null && recipient.getRole() != null
+                    ? recipient.getRole().getRoleName()
+                    : null;
+
+            if ("Admin".equalsIgnoreCase(roleName)) {
+                return "/admin/disputes/" + relatedEntityId;
+            }
+            if ("Seller".equalsIgnoreCase(roleName)) {
+                return "/seller/disputes/" + relatedEntityId;
+            }
+            if ("Buyer".equalsIgnoreCase(roleName)) {
+                return "/buyer/disputes/" + relatedEntityId;
+            }
+        }
+
+        return actionUrl;
     }
 
     private Map<String, Long> toCountMap(List<Object[]> rows) {

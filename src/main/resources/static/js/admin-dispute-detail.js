@@ -133,6 +133,16 @@ const AdminDisputeDetail = (function() {
         return date.toLocaleDateString('vi-VN');
     }
 
+    function escapeHtml(value) {
+        if (value === null || value === undefined) return '';
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     // Render Functions
     function getStatusConfig(status) {
         const configs = {
@@ -354,79 +364,115 @@ const AdminDisputeDetail = (function() {
         proposalEl.innerHTML = html;
     }
 
+    function getTimelineEventVisual(event) {
+        const visuals = {
+            DISPUTE_OPENED: {
+                icon: 'ph-warning-circle',
+                ring: 'ring-red-100',
+                iconColor: 'text-red-600',
+                bg: 'bg-red-50'
+            },
+            SELLER_RESPONDED: {
+                icon: 'ph-chat-centered-text',
+                ring: 'ring-emerald-100',
+                iconColor: 'text-emerald-600',
+                bg: 'bg-emerald-50'
+            },
+            SELLER_MESSAGE: {
+                icon: 'ph-chat-centered-text',
+                ring: 'ring-emerald-100',
+                iconColor: 'text-emerald-600',
+                bg: 'bg-emerald-50'
+            },
+            BUYER_MESSAGE: {
+                icon: 'ph-chat-circle-text',
+                ring: 'ring-blue-100',
+                iconColor: 'text-blue-600',
+                bg: 'bg-blue-50'
+            },
+            ADMIN_ASSIGNED: {
+                icon: 'ph-user-gear',
+                ring: 'ring-amber-100',
+                iconColor: 'text-amber-600',
+                bg: 'bg-amber-50'
+            },
+            REVIEW_STARTED: {
+                icon: 'ph-magnifying-glass',
+                ring: 'ring-orange-100',
+                iconColor: 'text-orange-600',
+                bg: 'bg-orange-50'
+            },
+            ADMIN_NOTE: {
+                icon: 'ph-note-pencil',
+                ring: 'ring-slate-100',
+                iconColor: 'text-slate-600',
+                bg: 'bg-slate-50'
+            },
+            DISPUTE_RESOLVED: {
+                icon: 'ph-check-circle',
+                ring: 'ring-green-100',
+                iconColor: 'text-green-600',
+                bg: 'bg-green-50'
+            },
+            DISPUTE_CANCELLED: {
+                icon: 'ph-x-circle',
+                ring: 'ring-gray-200',
+                iconColor: 'text-gray-600',
+                bg: 'bg-gray-50'
+            }
+        };
+
+        return visuals[event.eventType] || {
+            icon: 'ph-clock-counter-clockwise',
+            ring: 'ring-gray-200',
+            iconColor: 'text-gray-600',
+            bg: 'bg-gray-50'
+        };
+    }
+
     function renderTimeline(dispute) {
         const container = document.getElementById('timeline-container');
         container.innerHTML = '';
 
-        const events = [];
-        
-        // Dispute opened
-        events.push({
-            type: 'opened',
-            title: 'Khiếu nại được mở',
-            description: 'Người mua đã mở khiếu nại',
-            timestamp: dispute.openedAt,
-            icon: 'ph-chat-centered-dots',
-            color: 'text-error'
+        const rawEvents = Array.isArray(dispute.timeline) ? dispute.timeline.slice() : [];
+        const events = rawEvents.filter(function(event) {
+            if (event.eventType !== 'ADMIN_ASSIGNED') {
+                return true;
+            }
+
+            return !rawEvents.some(function(candidate) {
+                return candidate.eventType === 'REVIEW_STARTED'
+                    && candidate.performerUsername === event.performerUsername
+                    && candidate.timestamp === event.timestamp;
+            });
         });
-
-        // Seller responded
-        if (dispute.sellerRespondedAt) {
-            events.push({
-                type: 'seller_response',
-                title: 'Người bán đã phản hồi',
-                description: 'Người bán đã gửi phản hồi',
-                timestamp: dispute.sellerRespondedAt,
-                icon: 'ph-megaphone',
-                color: 'text-success'
-            });
-        }
-
-        // Admin review started
-        if (dispute.adminReviewStartedAt) {
-            events.push({
-                type: 'review',
-                title: 'Bắt đầu điều tra',
-                description: 'Admin đã bắt đầu xem xét khiếu nại',
-                timestamp: dispute.adminReviewStartedAt,
-                icon: 'ph-magnifying-glass',
-                color: 'text-warning'
-            });
-        }
-
-        // Resolved
-        if (dispute.resolvedAt) {
-            events.push({
-                type: 'resolved',
-                title: 'Đã giải quyết',
-                description: dispute.resolutionNotes || 'Khiếu nại đã được giải quyết',
-                timestamp: dispute.resolvedAt,
-                icon: 'ph-check-circle',
-                color: 'text-success'
-            });
-        }
-
-        // Sort by timestamp (newest first)
-        events.sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
-
-        events.forEach(function(event) {
-            const eventEl = document.createElement('div');
-            eventEl.className = 'flex items-start gap-4 p-3 bg-gray-50 rounded-lg';
-            eventEl.innerHTML = 
-                '<div class="w-10 h-10 rounded-full bg-white flex items-center justify-center ' + event.color + ' shadow-sm">' +
-                    '<i class="ph ' + event.icon + ' text-lg"></i>' +
-                '</div>' +
-                '<div class="flex-1">' +
-                    '<div class="font-bold text-gray-900">' + event.title + '</div>' +
-                    '<div class="text-sm text-gray-600">' + event.description + '</div>' +
-                    '<div class="text-xs text-gray-400 mt-1">' + formatDateTime(event.timestamp) + '</div>' +
-                '</div>';
-            container.appendChild(eventEl);
-        });
+        events.sort(function(a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
 
         if (events.length === 0) {
             container.innerHTML = '<p class="text-gray-400 text-center py-4">Chưa có sự kiện nào</p>';
+            return;
         }
+
+        events.forEach(function(event, index) {
+            const visual = getTimelineEventVisual(event);
+            const isLast = index === events.length - 1;
+            const eventEl = document.createElement('div');
+            eventEl.className = 'relative flex gap-4 pb-5' + (isLast ? '' : '');
+
+            eventEl.innerHTML =
+                '<div class="relative flex flex-col items-center">' +
+                    '<div class="flex h-11 w-11 items-center justify-center rounded-full bg-white ring-4 ' + visual.ring + '">' +
+                        '<i class="ph ' + visual.icon + ' text-xl ' + visual.iconColor + '"></i>' +
+                    '</div>' +
+                    (isLast ? '' : '<div class="mt-2 h-full min-h-8 w-px bg-gray-200"></div>') +
+                '</div>' +
+                '<div class="flex-1 rounded-xl border border-gray-100 ' + visual.bg + ' px-4 py-3 shadow-sm">' +
+                    '<div class="text-sm font-semibold leading-6 text-gray-900 whitespace-pre-wrap">' + escapeHtml(event.description || 'Không có mô tả') + '</div>' +
+                    '<div class="mt-1 text-xs text-gray-500">' + escapeHtml(formatDateTime(event.timestamp)) + '</div>' +
+                '</div>';
+
+            container.appendChild(eventEl);
+        });
     }
 
     function renderActions(dispute) {
